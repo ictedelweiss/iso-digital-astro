@@ -1,0 +1,33 @@
+---
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+import '../styles/global.css';
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Sistem Digitalisasi Dokumen & Alur Approval ISO 21001:2018 Yayasan Sinar Putih Edelweiss - Modern School & Enterprise Portal" />
+    <meta name="theme-color" content="#1976d2" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-[#f0f4f9] text-slate-800 min-h-screen antialiased selection:bg-blue-200 selection:text-blue-900">
+    <slot />
+  </body>
+</html>

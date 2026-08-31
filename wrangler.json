@@ -1,0 +1,16 @@
+{
+  "name": "iso-digital-prototype",
+  "compatibility_date": "2024-08-19",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "pages_build_output_dir": "./dist",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "iso_digital_db",
+      "database_id": "48836c01-a7b1-4833-bbb1-87990cf5f20f",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}
