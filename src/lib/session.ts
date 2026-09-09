@@ -24,6 +24,8 @@ export interface SessionUser {
   department: string;
   /** Authoritative role, resolved from the database — never from the client. */
   role: 'admin' | 'coordinator' | 'approver' | 'staff';
+  /** Invalidation counter: must match `users.session_version` in DB. */
+  sessionVersion?: number;
 }
 
 export type Role = SessionUser['role'];

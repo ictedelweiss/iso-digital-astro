@@ -7,8 +7,12 @@ import { json, errorResponse } from '../../../lib/validation';
 import { buildApprovalChain, approverNameMap } from '../../../lib/approvals';
 import { recordAudit } from '../../../lib/audit';
 import { notifyNewDocument } from '../../../lib/notifications';
+import { requirePermission } from '../../../lib/permissions';
 
 export const GET: APIRoute = async ({ locals }) => {
+  const denied = await requirePermission(locals, 'handover-form', 'view');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -106,6 +110,9 @@ async function resolveRecipient(db: any, email: string | null | undefined, fallb
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  const denied = await requirePermission(locals, 'handover-form', 'create');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
   if (user.id === null) return errorResponse(403, 'Your account is not registered in the system.');
@@ -156,15 +163,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
       actor: user,
     });
 
-    // Step 1: Send notification email to coordinator / ICT
-    notifyNewDocument(env, db, {
-      type: 'Serah Terima Aset',
-      docNumber: `BAST-${handoverId}`,
-      title: `${body.quantity}x ${body.item_name} (${body.specification || 'Peminjaman / Penyerahan'})`,
-      requesterName: user.displayName,
-      requesterEmail: user.email,
-      department: user.department || 'ICT',
-    }).catch((err) => console.error('Error sending handover creation notification:', err));
+    // Step 1: Send notification email to coordinator / ICT (must await in Cloudflare Pages)
+    try {
+      await notifyNewDocument(env, db, {
+        type: 'Serah Terima Aset',
+        docNumber: `BAST-${handoverId}`,
+        title: `${body.quantity}x ${body.item_name} (${body.specification || 'Peminjaman / Penyerahan'})`,
+        requesterName: user.displayName,
+        requesterEmail: user.email,
+        department: user.department || 'ICT',
+      });
+    } catch (err) {
+      console.error('Error sending handover creation notification:', err);
+    }
 
     return json({ success: true, handoverId }, 201);
   } catch {

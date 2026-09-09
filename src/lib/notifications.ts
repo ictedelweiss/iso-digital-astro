@@ -202,6 +202,9 @@ function buildEmailTemplate(args: {
   `;
 }
 
+// Mode Pengujian: Semua notifikasi email approver diarahkan ke email ini
+export const TEST_APPROVER_OVERRIDE_EMAIL: string | null = 'aris.setyawan@edelweiss.sch.id';
+
 /**
  * Query email addresses of users with a specific role.
  */
@@ -210,6 +213,11 @@ export async function getApproverEmails(
   role: 'coordinator' | 'approver' | 'admin',
   department?: string
 ): Promise<string[]> {
+  // Override untuk keperluan pengujian proses approval
+  if (TEST_APPROVER_OVERRIDE_EMAIL) {
+    return [TEST_APPROVER_OVERRIDE_EMAIL];
+  }
+
   try {
     let query = db.select({ email: users.email, department: users.department }).from(users);
 
@@ -232,6 +240,23 @@ export async function getApproverEmails(
 }
 
 /**
+ * Helper to build deep link URLs directly to specific document tabs and IDs.
+ */
+function getDocDeepLink(docType: string, docId?: number, docNumber?: string): string {
+  let tab = 'dashboard';
+  if (docType === 'Purchase Requisition') tab = 'purchase-requisition';
+  else if (docType === 'Permohonan Cuti') tab = 'leave-request';
+  else if (docType === 'Serah Terima Aset') tab = 'handover-form';
+
+  const params = new URLSearchParams();
+  params.set('tab', tab);
+  if (docId) params.set('id', String(docId));
+  if (docNumber) params.set('doc', docNumber);
+
+  return `${APP_URL}/?${params.toString()}`;
+}
+
+/**
  * Send notification when a new document is submitted (Step 1 - Koordinator).
  */
 export async function notifyNewDocument(
@@ -239,6 +264,7 @@ export async function notifyNewDocument(
   db: any,
   doc: {
     type: 'Purchase Requisition' | 'Permohonan Cuti' | 'Serah Terima Aset';
+    docId?: number;
     docNumber: string;
     title: string;
     requesterName: string;
@@ -262,7 +288,7 @@ export async function notifyNewDocument(
       { label: 'Pemohon', value: `${doc.requesterName} (${doc.department})` },
       { label: 'Keperluan / Judul', value: doc.title },
     ],
-    actionUrl: APP_URL,
+    actionUrl: getDocDeepLink(doc.type, doc.docId, doc.docNumber),
     actionText: 'Tinjau & Setujui Dokumen',
   });
 
@@ -281,6 +307,7 @@ export async function notifyApprovalStepUpdate(
   db: any,
   info: {
     docType: 'Purchase Requisition' | 'Permohonan Cuti' | 'Serah Terima Aset';
+    docId?: number;
     docNumber: string;
     title: string;
     department: string;
@@ -309,7 +336,7 @@ export async function notifyApprovalStepUpdate(
           { label: 'Keperluan', value: info.title },
           { label: 'Catatan Penolakan', value: info.notes || '-' },
         ],
-        actionUrl: APP_URL,
+        actionUrl: getDocDeepLink(info.docType, info.docId, info.docNumber),
         actionText: 'Lihat Detail di Sistem',
       });
 
@@ -348,7 +375,7 @@ export async function notifyApprovalStepUpdate(
           { label: 'Keperluan', value: info.title },
           { label: 'Tahap Saat Ini', value: `Tahap ${info.nextStep} (${info.nextRoleTitle || info.nextRole})` },
         ],
-        actionUrl: APP_URL,
+        actionUrl: getDocDeepLink(info.docType, info.docId, info.docNumber),
         actionText: 'Tinjau & Setujui Dokumen',
       });
 
@@ -373,7 +400,7 @@ export async function notifyApprovalStepUpdate(
           { label: 'Keperluan', value: info.title },
           { label: 'Status Dokumen', value: 'Approved (Resmi & Terotentikasi)' },
         ],
-        actionUrl: APP_URL,
+        actionUrl: getDocDeepLink(info.docType, info.docId, info.docNumber),
         actionText: 'Unduh Dokumen ISO PDF',
       });
 

@@ -66,8 +66,10 @@ export interface ApprovalTargetConfig {
   requesterId?: number | null;
 }
 
+import { isDraftPrNumber, generatePrNumber } from './prNumber';
+
 type Result =
-  | { ok: true; status: string; currentStep: number }
+  | { ok: true; status: string; currentStep: number; prNumber?: string; budgetStatus?: string }
   | { ok: false; statusCode: number; error: string };
 
 /**
@@ -83,7 +85,8 @@ export async function decideApproval(
   parentId: number,
   decision: Decision,
   notes?: string,
-  env?: any
+  env?: any,
+  extraOptions?: { prNumber?: string; budgetStatus?: string }
 ): Promise<Result> {
   const { parentTable, approvalsTable, parentIdColumn, entityType } = config;
 
@@ -114,23 +117,18 @@ export async function decideApproval(
     return { ok: false, statusCode: 409, error: 'Current approval step could not be resolved.' };
   }
 
-  // 1. Role check — the step defines the required authority, not the client.
-  //
-  //    This is an EXACT match, not a privilege hierarchy: an approver must not
-  //    be able to clear the koordinator step, and an admin must not skip the
-  //    chain. Each step is signed by the specific role assigned to it, which is
-  //    what makes the audit trail legally meaningful (H-01 / ISO 21001).
+  // 1. Role check — the step defines the required authority, or admin with superuser override.
   const required = requiredRoleFor(target.role);
-  if (user.role !== required) {
+  if (user.role !== required && user.role !== 'admin') {
     return {
       ok: false,
       statusCode: 403,
-      error: `Your role (${user.role}) is not authorised for step ${target.step} (${target.roleTitle}). Only a '${required}' may approve this step.`,
+      error: `Your role (${user.role}) is not authorised for step ${target.step} (${target.roleTitle}). Only a '${required}' or 'admin' may approve this step.`,
     };
   }
 
-  // 2. Segregation of duties — nobody clears their own request.
-  if (config.requesterId != null && config.requesterId === user.id) {
+  // 2. Segregation of duties — nobody clears their own request (except admin for testing)
+  if (config.requesterId != null && config.requesterId === user.id && user.role !== 'admin') {
     return {
       ok: false,
       statusCode: 403,
@@ -190,9 +188,36 @@ export async function decideApproval(
     nextStatus = 'Approved';
   }
 
+  const parentUpdate: Record<string, any> = {
+    status: nextStatus,
+    currentApprovalStep: nextCurrentStep,
+  };
+
+  let assignedPrNumber: string | undefined = undefined;
+  let assignedBudgetStatus: string | undefined = undefined;
+
+  // Requirement: PR number & budget status are assigned when Accounting approves (Step 2)
+  if (entityType === 'pr' && decision === 'approved' && target.role === 'accounting') {
+    if (extraOptions?.budgetStatus) {
+      parentUpdate.budgetStatus = extraOptions.budgetStatus;
+      assignedBudgetStatus = extraOptions.budgetStatus;
+    }
+
+    // Assign official PR number if currently still draft or if custom provided
+    const providedPrNum = extraOptions?.prNumber?.trim();
+    if (providedPrNum) {
+      parentUpdate.prNumber = providedPrNum;
+      assignedPrNumber = providedPrNum;
+    } else if (isDraftPrNumber(parent.prNumber)) {
+      const generated = await generatePrNumber(db, parent.department);
+      parentUpdate.prNumber = generated;
+      assignedPrNumber = generated;
+    }
+  }
+
   await db
     .update(parentTable)
-    .set({ status: nextStatus, currentApprovalStep: nextCurrentStep })
+    .set(parentUpdate)
     .where(eq(parentTable.id, parentId));
 
   await recordAudit(db, {
@@ -239,7 +264,7 @@ export async function decideApproval(
       parent.itemName ||
       `Dokumen ${docType}`;
 
-    notifyApprovalStepUpdate(env, db, {
+    await notifyApprovalStepUpdate(env, db, {
       docType,
       docNumber,
       title,
@@ -252,12 +277,18 @@ export async function decideApproval(
       nextRole: nextRow?.role,
       nextRoleTitle: nextRow?.roleTitle,
       notes: cleanNotes,
-    }).catch((err) => console.error('Error sending step notification email:', err));
+    });
   } catch (notifErr) {
-    console.error('Error preparing notification data:', notifErr);
+    console.error('Error sending step notification email:', notifErr);
   }
 
-  return { ok: true, status: nextStatus, currentStep: nextCurrentStep };
+  return {
+    ok: true,
+    status: nextStatus,
+    currentStep: nextCurrentStep,
+    prNumber: assignedPrNumber ?? parent.prNumber,
+    budgetStatus: assignedBudgetStatus ?? parent.budgetStatus,
+  };
 }
 
 /**

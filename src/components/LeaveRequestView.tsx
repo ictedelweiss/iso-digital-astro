@@ -1,5 +1,5 @@
-import { createSignal, createResource, For, Show } from 'solid-js';
-import type { LeaveRequest, UserProfile, Department } from '../lib/types';
+import { createSignal, createResource, createEffect, For, Show } from 'solid-js';
+import type { LeaveRequest, UserProfile, Department, EmployeeLeaveAllocation } from '../lib/types';
 import { SAMPLE_SIGNATURE_1, OFFICIAL_DEPARTMENTS, COORDINATORS_MAP } from '../lib/dummyData';
 
 const fetchLeaves = async () => {
@@ -7,6 +7,13 @@ const fetchLeaves = async () => {
   if (!res.ok) throw new Error('Failed to fetch Leaves');
   const json = await res.json();
   return json.data as LeaveRequest[];
+};
+
+const fetchMyAllocation = async (year: number) => {
+  const res = await fetch(`/api/leaves/allocations?year=${year}`);
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json.data;
 };
 
 interface Props {
@@ -22,33 +29,179 @@ export default function LeaveRequestView(props: Props) {
   const [isEditMode, setIsEditMode] = createSignal(false);
   const [editLeaveId, setEditLeaveId] = createSignal<number | null>(null);
   const [searchQuery, setSearchQuery] = createSignal('');
+  const [filterPeriod, setFilterPeriod] = createSignal<'all' | 'weekly' | 'monthly'>('all');
+  const [filterStatus, setFilterStatus] = createSignal<'all' | 'Pending' | 'Approved' | 'Rejected'>('all');
+  const [sortBy, setSortBy] = createSignal<'newest' | 'oldest' | 'days'>('newest');
+
+  // Allocation Management State (HRD & Admin only)
+  const isHRorAdmin = () => {
+    if (!props.currentUser) return false;
+    if (props.currentUser.role === 'admin') return true;
+    const dept = (props.currentUser.department || '').toLowerCase();
+    return dept.includes('hr') || dept.includes('human resource') || dept.includes('sdm');
+  };
+
+  const [showAllocModal, setShowAllocModal] = createSignal(false);
+  const [allocYear, setAllocYear] = createSignal(new Date().getFullYear());
+  const [allocList, setAllocList] = createSignal<EmployeeLeaveAllocation[]>([]);
+  const [allocSearch, setAllocSearch] = createSignal('');
+  const [isLoadingAlloc, setIsLoadingAlloc] = createSignal(false);
+  const [isSavingAlloc, setIsSavingAlloc] = createSignal(false);
+  const [allocSaveSuccess, setAllocSaveSuccess] = createSignal<string | null>(null);
+
+  const loadAllocations = async (year: number) => {
+    setIsLoadingAlloc(true);
+    setAllocSaveSuccess(null);
+    try {
+      const res = await fetch(`/api/leaves/allocations?year=${year}`);
+      if (!res.ok) throw new Error('Gagal mengambil alokasi cuti.');
+      const data = await res.json();
+      if (data.data?.allocations) {
+        setAllocList(data.data.allocations);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Gagal memuat data alokasi.');
+    } finally {
+      setIsLoadingAlloc(false);
+    }
+  };
+
+  const handleOpenAllocModal = () => {
+    setShowAllocModal(true);
+    loadAllocations(allocYear());
+  };
+
+  const updateAllocItem = (userId: number, field: 'hakPrev' | 'hakCurr' | 'notes', val: any) => {
+    setAllocList(prev =>
+      prev.map(item => {
+        if (item.userId !== userId) return item;
+        const updated = { ...item, [field]: val };
+        updated.totalHak = (Number(updated.hakPrev) || 0) + (Number(updated.hakCurr) || 0);
+        updated.sisa = Math.max(0, updated.totalHak - (item.takenDays || 0));
+        return updated;
+      })
+    );
+  };
+
+  const saveAllocItem = async (item: EmployeeLeaveAllocation) => {
+    try {
+      const res = await fetch('/api/leaves/allocations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: item.userId,
+          year: allocYear(),
+          hak_prev: Number(item.hakPrev) || 0,
+          hak_curr: Number(item.hakCurr) || 0,
+          notes: item.notes || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Gagal menyimpan.');
+      setAllocSaveSuccess(`Alokasi ${item.displayName} berhasil disimpan.`);
+      setTimeout(() => setAllocSaveSuccess(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Gagal menyimpan alokasi.');
+    }
+  };
+
+  const saveAllAllocations = async () => {
+    if (isSavingAlloc()) return;
+    setIsSavingAlloc(true);
+    try {
+      const payload = {
+        year: allocYear(),
+        allocations: allocList().map(a => ({
+          user_id: a.userId,
+          hak_prev: Number(a.hakPrev) || 0,
+          hak_curr: Number(a.hakCurr) || 0,
+          notes: a.notes || null,
+        })),
+      };
+      const res = await fetch('/api/leaves/allocations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Gagal menyimpan batch alokasi.');
+      setAllocSaveSuccess(`Semua alokasi tahun ${allocYear()} berhasil disimpan!`);
+      setTimeout(() => setAllocSaveSuccess(null), 3500);
+    } catch (err: any) {
+      alert(err.message || 'Gagal menyimpan.');
+    } finally {
+      setIsSavingAlloc(false);
+    }
+  };
+
+  // Auto select Leave from URL params if present, otherwise first leave
+  createEffect(() => {
+    const list = leaves();
+    if (list.length === 0) return;
+
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const idParam = urlParams.get('id') || urlParams.get('leave_id');
+      const docParam = urlParams.get('doc');
+
+      if (idParam || docParam) {
+        const found = list.find(
+          (lv) =>
+            (idParam && lv.id === Number(idParam)) ||
+            (docParam && `CUTI-${lv.id}`.toLowerCase() === docParam.toLowerCase())
+        );
+        if (found) {
+          setSelectedLeave(found);
+          return;
+        }
+      }
+    }
+
+    if (!selectedLeave()) {
+      setSelectedLeave(list[0]);
+    }
+  });
 
   // Form State
   const [formName, setFormName] = createSignal(props.currentUser?.displayName || '');
   const [formPosition, setFormPosition] = createSignal(props.currentUser?.jobTitle || 'Staff IT & Lead Developer');
   const [formDepartment, setFormDepartment] = createSignal<Department>((props.currentUser?.department as Department) || 'ICT');
-  const [formStartDate, setFormStartDate] = createSignal('2026-08-26');
-  const [formEndDate, setFormEndDate] = createSignal('2026-08-28');
-  const [formWorkDays, setFormWorkDays] = createSignal(3);
-  const [formPurpose, setFormPurpose] = createSignal('Keperluan keluarga mendesak di luar kota.');
-  const [formHakPrev, setFormHakPrev] = createSignal(2);
+  const [formStartDate, setFormStartDate] = createSignal(new Date().toISOString().substring(0, 10));
+  const [formEndDate, setFormEndDate] = createSignal(new Date().toISOString().substring(0, 10));
+  const [formWorkDays, setFormWorkDays] = createSignal(1);
+  const [formPurpose, setFormPurpose] = createSignal('');
+  const [formHakPrev, setFormHakPrev] = createSignal(0);
   const [formHakCurr, setFormHakCurr] = createSignal(12);
-  const [formTakenUntil, setFormTakenUntil] = createSignal(3);
+  const [formTakenUntil, setFormTakenUntil] = createSignal(0);
   const [formSignature, setFormSignature] = createSignal(props.currentUser?.signature_data || SAMPLE_SIGNATURE_1);
+
+  // Auto fetch quota for current user when opening create form
+  const loadUserAllocation = async () => {
+    try {
+      const thisYear = new Date().getFullYear();
+      const alloc = await fetchMyAllocation(thisYear);
+      if (alloc) {
+        setFormHakPrev(alloc.hak_prev ?? 0);
+        setFormHakCurr(alloc.hak_curr ?? 12);
+        setFormTakenUntil(alloc.taken_days ?? 0);
+      }
+    } catch {
+      // Keep defaults
+    }
+  };
 
   const resetForm = () => {
     setFormName(props.currentUser?.displayName || '');
     setFormPosition(props.currentUser?.jobTitle || 'Staff IT & Lead Developer');
     setFormDepartment((props.currentUser?.department as Department) || 'ICT');
-    setFormStartDate('2026-08-26');
-    setFormEndDate('2026-08-28');
-    setFormWorkDays(3);
-    setFormPurpose('Keperluan keluarga mendesak di luar kota.');
-    setFormHakPrev(2);
-    setFormHakCurr(12);
-    setFormTakenUntil(3);
+    const today = new Date().toISOString().substring(0, 10);
+    setFormStartDate(today);
+    setFormEndDate(today);
+    setFormWorkDays(1);
+    setFormPurpose('');
     setIsEditMode(false);
     setEditLeaveId(null);
+    loadUserAllocation();
   };
 
   const openCreateModal = () => {
@@ -169,6 +322,17 @@ export default function LeaveRequestView(props: Props) {
     }).catch(err => alert("Error deleting Leave: " + err));
   };
 
+  // State Modal Konfirmasi Approval Cuti
+  const [showConfirmApproveModal, setShowConfirmApproveModal] = createSignal(false);
+  const [confirmApproveLeaveId, setConfirmApproveLeaveId] = createSignal<number | null>(null);
+  const [confirmApproveStepNum, setConfirmApproveStepNum] = createSignal<number>(1);
+
+  const promptApproveStep = (leaveId: number, stepNum: number) => {
+    setConfirmApproveLeaveId(leaveId);
+    setConfirmApproveStepNum(stepNum);
+    setShowConfirmApproveModal(true);
+  };
+
   /**
    * Persist an approval decision through the server (H-01 fix).
    *
@@ -189,6 +353,9 @@ export default function LeaveRequestView(props: Props) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Gagal menyetujui dokumen.');
+
+      setShowConfirmApproveModal(false);
+      setConfirmApproveLeaveId(null);
 
       setLeaves(leaves().map(l => {
         if (l.id !== leaveId) return l;
@@ -225,10 +392,53 @@ export default function LeaveRequestView(props: Props) {
   };
 
   const filteredLeaves = () => {
-    return leaves().filter(l => {
-      return l.name.toLowerCase().includes(searchQuery().toLowerCase()) ||
-             l.department.toLowerCase().includes(searchQuery().toLowerCase()) ||
-             l.purpose.toLowerCase().includes(searchQuery().toLowerCase());
+    let result = leaves().filter(l => {
+      // Search
+      const matchSearch =
+        l.name.toLowerCase().includes(searchQuery().toLowerCase()) ||
+        l.department.toLowerCase().includes(searchQuery().toLowerCase()) ||
+        l.purpose.toLowerCase().includes(searchQuery().toLowerCase());
+
+      if (!matchSearch) return false;
+
+      // Status Filter
+      if (filterStatus() !== 'all' && l.status !== filterStatus()) {
+        return false;
+      }
+
+      // Period Filter
+      if (filterPeriod() !== 'all') {
+        const dateStr = l.start_date || l.created_at;
+        if (dateStr) {
+          const itemDate = new Date(dateStr);
+          const now = new Date();
+          if (filterPeriod() === 'weekly') {
+            const diffDays = (now.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24);
+            if (diffDays > 7 || diffDays < -1) return false;
+          } else if (filterPeriod() === 'monthly') {
+            if (
+              itemDate.getFullYear() !== now.getFullYear() ||
+              itemDate.getMonth() !== now.getMonth()
+            ) {
+              return false;
+            }
+          }
+        }
+      }
+
+      return true;
+    });
+
+    // Sort
+    return result.sort((a, b) => {
+      if (sortBy() === 'newest') {
+        return (b.id || 0) - (a.id || 0);
+      } else if (sortBy() === 'oldest') {
+        return (a.id || 0) - (b.id || 0);
+      } else if (sortBy() === 'days') {
+        return (b.work_days || 0) - (a.work_days || 0);
+      }
+      return 0;
     });
   };
 
@@ -248,26 +458,122 @@ export default function LeaveRequestView(props: Props) {
           </p>
         </div>
 
-        <button
-          onClick={openCreateModal}
-          class="px-4 py-2.5 bg-[#1877f2] hover:bg-blue-600 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2"
-        >
-          <span>➕</span> Ajukan Cuti Baru
-        </button>
+        <div class="flex items-center gap-2.5 flex-wrap">
+          {/* Tombol Khusus HRD & Admin untuk Kelola Kuota Cuti */}
+          <Show when={isHRorAdmin()}>
+            <button
+              onClick={handleOpenAllocModal}
+              class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2"
+              title="Khusus HRD dan Admin: Kelola Kuota Cuti Tahunan Pegawai"
+            >
+              <span>💼</span> Kelola Alokasi Cuti (HRD)
+            </button>
+          </Show>
+
+          <button
+            onClick={openCreateModal}
+            class="px-4 py-2.5 bg-[#1877f2] hover:bg-blue-600 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2"
+          >
+            <span>➕</span> Ajukan Cuti Baru
+          </button>
+        </div>
+      </div>
+
+      {/* Filter & Sort Bar (Clean, simple, consistent) */}
+      <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="w-full sm:w-80 relative">
+          <input
+            type="text"
+            placeholder="Cari nama karyawan, unit, atau alasan..."
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white"
+          />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          {/* Filter Periode */}
+          <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+            <span class="text-[11px] font-semibold text-slate-500 px-1.5">📅</span>
+            {[
+              { key: 'all', label: 'Semua' },
+              { key: 'weekly', label: 'Mingguan' },
+              { key: 'monthly', label: 'Bulan Ini' },
+            ].map((p) => (
+              <button
+                type="button"
+                onClick={() => setFilterPeriod(p.key as any)}
+                class={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                  filterPeriod() === p.key
+                    ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Filter Status */}
+          <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+            <span class="text-[11px] font-semibold text-slate-500 px-1.5">Status:</span>
+            {(['all', 'Pending', 'Approved'] as const).map((st) => (
+              <button
+                type="button"
+                onClick={() => setFilterStatus(st)}
+                class={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                  filterStatus() === st
+                    ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                {st === 'all' ? 'Semua' : st}
+              </button>
+            ))}
+          </div>
+
+          {/* Sort Pill Dropdown */}
+          <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+            <span class="text-[11px] font-semibold text-slate-500 px-1.5">Sort:</span>
+            {[
+              { key: 'newest', label: 'Terbaru' },
+              { key: 'oldest', label: 'Terlama' },
+              { key: 'days', label: 'Hari Terbanyak' },
+            ].map((s) => (
+              <button
+                type="button"
+                onClick={() => setSortBy(s.key as any)}
+                class={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                  sortBy() === s.key
+                    ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Main Grid Layout */}
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Leave List (5 cols) */}
         <div class="lg:col-span-5 space-y-3">
-          <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-            <input
-              type="text"
-              placeholder="Cari nama karyawan atau unit..."
-              value={searchQuery()}
-              onInput={(e) => setSearchQuery(e.currentTarget.value)}
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white"
-            />
+          <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+            <span>Ditemukan <b>{filteredLeaves().length}</b> permohonan cuti</span>
+            <Show when={filterPeriod() !== 'all' || filterStatus() !== 'all' || searchQuery()}>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilterPeriod('all');
+                  setFilterStatus('all');
+                }}
+                class="text-indigo-600 hover:underline font-semibold"
+              >
+                Reset Filter
+              </button>
+            </Show>
           </div>
 
           <div class="space-y-3">
@@ -415,7 +721,7 @@ export default function LeaveRequestView(props: Props) {
                       <div class="text-xs font-bold text-slate-700">Alur Persetujuan Cuti</div>
                       {lv.status === 'Pending' && (
                         <button
-                          onClick={() => handleApproveStep(lv.id)}
+                          onClick={() => promptApproveStep(lv.id, lv.current_approval_step)}
                           class="px-3.5 py-1.5 bg-[#1877f2] hover:bg-blue-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5"
                         >
                           ✍️ Setujui Step {lv.current_approval_step}
@@ -618,6 +924,264 @@ export default function LeaveRequestView(props: Props) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal Manajemen Alokasi Cuti Tahunan Pegawai (Khusus HRD & Admin) */}
+      <Show when={showAllocModal()}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div class="bg-white border border-slate-200 rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header Modal */}
+            <div class="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-lg">
+                  💼
+                </div>
+                <div>
+                  <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    Alokasi Kuota Cuti Tahunan Pegawai
+                    <span class="text-[11px] font-mono font-semibold px-2 py-0.5 bg-emerald-500/30 text-emerald-300 rounded-md border border-emerald-500/40">
+                      HRD & Admin Only
+                    </span>
+                  </h3>
+                  <p class="text-xs text-slate-300">
+                    Atur saldo hak cuti tahun lalu (hakPrev) dan tahun berjalan (hakCurr) masing-masing pegawai.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAllocModal(false)}
+                class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Toolbar Filter & Year Selector */}
+            <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div class="flex items-center gap-2 w-full sm:w-auto">
+                <label class="text-xs font-bold text-slate-700 whitespace-nowrap">📅 Tahun Kuota:</label>
+                <select
+                  value={allocYear()}
+                  onChange={(e) => {
+                    const y = Number(e.currentTarget.value);
+                    setAllocYear(y);
+                    loadAllocations(y);
+                  }}
+                  class="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-[#1877f2]"
+                >
+                  <option value={2027}>2027</option>
+                  <option value={2026}>2026 (Tahun Berjalan)</option>
+                  <option value={2025}>2025</option>
+                  <option value={2024}>2024</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => loadAllocations(allocYear())}
+                  disabled={isLoadingAlloc()}
+                  class="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded-xl font-medium transition"
+                  title="Muat Ulang"
+                >
+                  🔄
+                </button>
+              </div>
+
+              <div class="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="text"
+                  placeholder="Cari nama pegawai / unit..."
+                  value={allocSearch()}
+                  onInput={(e) => setAllocSearch(e.currentTarget.value)}
+                  class="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 w-full sm:w-60 focus:border-[#1877f2]"
+                />
+                <button
+                  type="button"
+                  onClick={saveAllAllocations}
+                  disabled={isSavingAlloc() || isLoadingAlloc()}
+                  class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow transition shrink-0 flex items-center gap-1.5"
+                >
+                  <span>💾</span>
+                  <span>{isSavingAlloc() ? 'Menyimpan...' : 'Simpan Semua'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Alert Notification */}
+            <Show when={allocSaveSuccess()}>
+              <div class="mx-6 mt-3 p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center justify-between">
+                <span>✅ {allocSaveSuccess()}</span>
+                <button onClick={() => setAllocSaveSuccess(null)} class="text-emerald-700 font-bold">✕</button>
+              </div>
+            </Show>
+
+            {/* Table Allocations */}
+            <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+              <Show when={!isLoadingAlloc()} fallback={
+                <div class="py-12 text-center text-slate-400 text-xs">
+                  <div class="animate-spin text-2xl mb-2">⏳</div>
+                  Memuat data kuota cuti pegawai...
+                </div>
+              }>
+                <div class="border border-slate-200 rounded-2xl overflow-hidden">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <th class="p-3">Pegawai / Unit</th>
+                        <th class="p-3 text-center w-24">Hak Thn Lalu</th>
+                        <th class="p-3 text-center w-24">Hak Thn Ini</th>
+                        <th class="p-3 text-center w-24">Total Kuota</th>
+                        <th class="p-3 text-center w-24">Terpakai</th>
+                        <th class="p-3 text-center w-24">Sisa Saldo</th>
+                        <th class="p-3">Catatan</th>
+                        <th class="p-3 text-center w-20">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      <For each={allocList().filter(a =>
+                        a.displayName.toLowerCase().includes(allocSearch().toLowerCase()) ||
+                        a.department.toLowerCase().includes(allocSearch().toLowerCase()) ||
+                        a.jobTitle.toLowerCase().includes(allocSearch().toLowerCase())
+                      )}>
+                        {(item) => (
+                          <tr class="hover:bg-slate-50/80 transition">
+                            <td class="p-3">
+                              <div class="font-bold text-slate-800">{item.displayName}</div>
+                              <div class="text-[11px] text-slate-500">{item.jobTitle} • <span class="font-medium text-indigo-600">{item.department}</span></div>
+                            </td>
+
+                            {/* Hak Prev Input */}
+                            <td class="p-3 text-center">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={item.hakPrev}
+                                onInput={(e) => updateAllocItem(item.userId, 'hakPrev', parseInt(e.currentTarget.value) || 0)}
+                                class="w-16 bg-white border border-slate-300 rounded-lg p-1 text-xs text-center font-semibold text-slate-800 focus:border-[#1877f2]"
+                              />
+                            </td>
+
+                            {/* Hak Curr Input */}
+                            <td class="p-3 text-center">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={item.hakCurr}
+                                onInput={(e) => updateAllocItem(item.userId, 'hakCurr', parseInt(e.currentTarget.value) || 0)}
+                                class="w-16 bg-white border border-slate-300 rounded-lg p-1 text-xs text-center font-semibold text-slate-800 focus:border-[#1877f2]"
+                              />
+                            </td>
+
+                            {/* Total Hak */}
+                            <td class="p-3 text-center font-bold text-slate-700">
+                              {item.totalHak}
+                            </td>
+
+                            {/* Taken Days */}
+                            <td class="p-3 text-center text-amber-700 font-semibold">
+                              {item.takenDays}
+                            </td>
+
+                            {/* Sisa Saldo */}
+                            <td class="p-3 text-center font-bold">
+                              <span class={`px-2 py-0.5 rounded-md text-[11px] ${
+                                item.sisa > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}>
+                                {item.sisa} Hari
+                              </span>
+                            </td>
+
+                            {/* Catatan */}
+                            <td class="p-3">
+                              <input
+                                type="text"
+                                placeholder="Ket / sisa cuti..."
+                                value={item.notes || ''}
+                                onInput={(e) => updateAllocItem(item.userId, 'notes', e.currentTarget.value)}
+                                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 focus:bg-white"
+                              />
+                            </td>
+
+                            {/* Aksi Simpan Baris */}
+                            <td class="p-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => saveAllocItem(item)}
+                                class="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 text-xs font-semibold rounded-lg border border-slate-200 transition"
+                                title="Simpan baris ini"
+                              >
+                                Simpan
+                              </button>
+                            </td>
+                          </tr>
+                        )}
+                      </For>
+                    </tbody>
+                  </table>
+                </div>
+              </Show>
+            </div>
+
+            {/* Footer Modal */}
+            <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+              <span>Total: <b>{allocList().length}</b> pegawai terdaftar dalam kuota tahun {allocYear()}.</span>
+              <button
+                type="button"
+                onClick={() => setShowAllocModal(false)}
+                class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal Konfirmasi Persetujuan Cuti */}
+      <Show when={showConfirmApproveModal() && confirmApproveLeaveId() !== null}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden p-6 space-y-4 animate-scaleUp">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-2xl bg-blue-100 text-[#1877f2] flex items-center justify-center text-xl shrink-0">
+                ✍️
+              </div>
+              <div>
+                <h3 class="font-bold text-base text-slate-800">Konfirmasi Persetujuan Cuti</h3>
+                <p class="text-xs text-slate-500">Persetujuan Tahap {confirmApproveStepNum()}</p>
+              </div>
+            </div>
+
+            <div class="p-3.5 bg-blue-50 border border-blue-100 rounded-xl text-xs text-slate-700 space-y-1.5 leading-relaxed">
+              <p>
+                Apakah Anda yakin ingin menyetujui pengajuan permohonan cuti ini?
+              </p>
+              <p class="text-[11px] text-blue-800">
+                Tanda tangan digital resmi Anda akan dibubuhkan secara otomatis pada lembar persetujuan cuti.
+              </p>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConfirmApproveModal(false);
+                  setConfirmApproveLeaveId(null);
+                }}
+                class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmApproveLeaveId() !== null && handleApproveStep(confirmApproveLeaveId()!)}
+                class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#1877f2] hover:bg-blue-600 shadow-md transition flex items-center gap-1.5"
+              >
+                <span>✓</span> Ya, Setujui & Tanda Tangani
+              </button>
+            </div>
           </div>
         </div>
       </Show>

@@ -6,8 +6,12 @@ import { parseBody, assetCreateSchema } from '../../../lib/schemas';
 import { json, errorResponse } from '../../../lib/validation';
 import { recordAudit } from '../../../lib/audit';
 import { hasRole } from '../../../lib/session';
+import { requirePermission } from '../../../lib/permissions';
 
 export const GET: APIRoute = async ({ locals }) => {
+  const denied = await requirePermission(locals, 'asset-management', 'view');
+  if (denied) return denied;
+
   const env = locals.runtime?.env;
   if (!env?.DB) return errorResponse(500, 'Database is not available.');
 
@@ -37,17 +41,14 @@ export const GET: APIRoute = async ({ locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  const denied = await requirePermission(locals, 'asset-management', 'create');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
   const env = locals.runtime?.env;
   if (!env?.DB) return errorResponse(500, 'Database is not available.');
-
-  // The asset register is a controlled record: only coordinators and above may
-  // add entries to it.
-  if (!hasRole(user, 'coordinator')) {
-    return errorResponse(403, 'Only coordinators and above can register assets.');
-  }
 
   const parsed = await parseBody(request, assetCreateSchema);
   if (!parsed.ok) return parsed.response;

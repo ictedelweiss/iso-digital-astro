@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -12,6 +12,9 @@ export const users = sqliteTable('users', {
   hasSignature: integer('has_signature', { mode: 'boolean' }).default(false),
   msId: text('ms_id').unique(),
   avatarUrl: text('avatar_url'),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  sessionVersion: integer('session_version').notNull().default(0),
+  lastLoginAt: text('last_login_at'),
   createdAt: text('created_at').default('CURRENT_TIMESTAMP'),
 });
 
@@ -22,8 +25,10 @@ export const purchaseRequisitions = sqliteTable('purchase_requisitions', {
   requesterId: integer('requester_id').references(() => users.id).notNull(),
   department: text('department').notNull(),
   neededDate: text('needed_date').notNull(),
-  budgetStatus: text('budget_status').notNull(), // 'Dianggarkan', 'Belum dianggarkan'
+  budgetStatus: text('budget_status').notNull(), // 'Dianggarkan', 'Belum dianggarkan', 'Tidak Memilih'
   notes: text('notes'),
+  attachmentName: text('attachment_name'),
+  attachmentData: text('attachment_data'),
   status: text('status').notNull().default('Pending'), // 'Pending', 'Approved', 'Rejected'
   currentApprovalStep: integer('current_approval_step').notNull().default(1),
   requesterSignature: text('requester_signature'),
@@ -87,6 +92,21 @@ export const leaveApprovals = sqliteTable('leave_approvals', {
   signature: text('signature'),
   notes: text('notes'),
 });
+
+// Annual Leave Allocations (HRD & Admin only)
+export const leaveAllocations = sqliteTable(
+  'leave_allocations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    year: integer('year').notNull(),
+    hakPrev: integer('hak_prev').notNull().default(0),
+    hakCurr: integer('hak_curr').notNull().default(12),
+    notes: text('notes'),
+    updatedAt: text('updated_at').default('CURRENT_TIMESTAMP'),
+  },
+  (t) => ({ uniq: uniqueIndex('user_year_allocation_unique').on(t.userId, t.year) })
+);
 
 // Handover
 export const handoverForms = sqliteTable('handover_forms', {
@@ -182,3 +202,55 @@ export const meetingAttendees = sqliteTable('meeting_attendees', {
   signaturePath: text('signature_path').notNull(), // Base64 or URL
   createdAt: text('created_at').default('CURRENT_TIMESTAMP'),
 });
+
+// Registri modul — sumber tunggal kebenaran untuk daftar modul yang bisa diatur aksesnya.
+export const modules = sqliteTable('modules', {
+  key: text('key').primaryKey(),              // 'purchase-requisition', 'admin-access', ...
+  label: text('label').notNull(),             // 'Purchase Requisition'
+  description: text('description'),
+  icon: text('icon'),                         // emoji, ikuti gaya Sidebar.tsx
+  sortOrder: integer('sort_order').notNull().default(0),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  // Modul bawaan sistem tidak boleh dihapus (menghindari FK yatim & menu hilang).
+  isSystem: integer('is_system', { mode: 'boolean' }).notNull().default(true),
+});
+
+// Hak akses DEFAULT per role. Baris yang tidak ada = tidak punya akses.
+export const rolePermissions = sqliteTable(
+  'role_permissions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    role: text('role').notNull(),             // 'admin' | 'approver' | 'coordinator' | 'staff'
+    moduleKey: text('module_key')
+      .notNull()
+      .references(() => modules.key, { onDelete: 'cascade' }),
+    canView: integer('can_view', { mode: 'boolean' }).notNull().default(false),
+    canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
+    canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
+    canDelete: integer('can_delete', { mode: 'boolean' }).notNull().default(false),
+    canApprove: integer('can_approve', { mode: 'boolean' }).notNull().default(false),
+  },
+  (t) => ({ uniq: uniqueIndex('role_module_unique').on(t.role, t.moduleKey) })
+);
+
+// OVERRIDE per user — menang atas default role. Tidak ada baris = ikut role.
+export const userPermissions = sqliteTable(
+  'user_permissions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    moduleKey: text('module_key')
+      .notNull()
+      .references(() => modules.key, { onDelete: 'cascade' }),
+    effect: text('effect').notNull(),         // 'allow' = pakai flag di bawah; 'deny' = cabut semua
+    canView: integer('can_view', { mode: 'boolean' }).notNull().default(false),
+    canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
+    canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
+    canDelete: integer('can_delete', { mode: 'boolean' }).notNull().default(false),
+    canApprove: integer('can_approve', { mode: 'boolean' }).notNull().default(false),
+  },
+  (t) => ({ uniq: uniqueIndex('user_module_unique').on(t.userId, t.moduleKey) })
+);
+

@@ -6,8 +6,12 @@ import { parseBody, meetingUpdateSchema } from '../../../lib/schemas';
 import { json, errorResponse } from '../../../lib/validation';
 import { recordAudit } from '../../../lib/audit';
 import { hasRole } from '../../../lib/session';
+import { requirePermission } from '../../../lib/permissions';
 
 export const PUT: APIRoute = async ({ request, params, locals }) => {
+  const denied = await requirePermission(locals, 'meeting-attendance', 'edit');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -63,6 +67,9 @@ export const PUT: APIRoute = async ({ request, params, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, locals }) => {
+  const denied = await requirePermission(locals, 'meeting-attendance', 'delete');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 

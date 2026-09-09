@@ -5,6 +5,7 @@ interface Props {
   deviceView: DeviceView;
   onSelectDevice: (view: DeviceView) => void;
   children: JSX.Element;
+  bottomNav?: JSX.Element;
 }
 
 export default function DevicePreviewFrame(props: Props) {
@@ -60,6 +61,9 @@ export default function DevicePreviewFrame(props: Props) {
             <div class="flex-1 w-full bg-[#f0f4f9] overflow-y-auto pb-14 lg:pb-0">
               {props.children}
             </div>
+
+            {/* Simulated Mobile Bottom Nav */}
+            {props.deviceView === 'mobile' && props.bottomNav}
 
             {/* Mobile Home Bar */}
             {props.deviceView === 'mobile' && (

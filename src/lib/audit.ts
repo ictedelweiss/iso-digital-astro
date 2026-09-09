@@ -15,7 +15,8 @@ export type AuditEntity =
   | 'handover'
   | 'meeting'
   | 'asset'
-  | 'user';
+  | 'user'
+  | 'permission';
 
 export type AuditAction =
   | 'created'

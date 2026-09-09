@@ -7,8 +7,12 @@ import { json, errorResponse } from '../../../lib/validation';
 import { buildApprovalChain, approverNameMap } from '../../../lib/approvals';
 import { recordAudit } from '../../../lib/audit';
 import { notifyNewDocument } from '../../../lib/notifications';
+import { requirePermission } from '../../../lib/permissions';
 
 export const GET: APIRoute = async ({ locals }) => {
+  const denied = await requirePermission(locals, 'leave-request', 'view');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -103,6 +107,9 @@ export const GET: APIRoute = async ({ locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  const denied = await requirePermission(locals, 'leave-request', 'create');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
   if (user.id === null) return errorResponse(403, 'Your account is not registered in the system.');
@@ -153,15 +160,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
       actor: user,
     });
 
-    // Step 1: Send notification email to coordinator
-    notifyNewDocument(env, db, {
-      type: 'Permohonan Cuti',
-      docNumber: `CUTI-${leaveId}`,
-      title: `${body.work_days} hari cuti (${body.start_date} s/d ${body.end_date}): ${body.purpose}`,
-      requesterName: user.displayName,
-      requesterEmail: user.email,
-      department: body.department,
-    }).catch((err) => console.error('Error sending leave creation notification:', err));
+    // Step 1: Send notification email to coordinator (must await in Cloudflare Pages)
+    try {
+      await notifyNewDocument(env, db, {
+        type: 'Permohonan Cuti',
+        docNumber: `CUTI-${leaveId}`,
+        title: `${body.work_days} hari cuti (${body.start_date} s/d ${body.end_date}): ${body.purpose}`,
+        requesterName: user.displayName,
+        requesterEmail: user.email,
+        department: body.department,
+      });
+    } catch (err) {
+      console.error('Error sending leave creation notification:', err);
+    }
 
     return json({ success: true, leaveId }, 201);
   } catch {

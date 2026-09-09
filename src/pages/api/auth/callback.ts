@@ -36,6 +36,8 @@ interface ResolvedUser {
   role: Role;
   jobTitle: string;
   department: string;
+  sessionVersion: number;
+  isActive: boolean;
   /**
    * false when no matching account exists in our directory. L-03 requires that
    * only accounts present in the `users` table may sign in, so the caller must
@@ -60,6 +62,8 @@ async function resolveUser(
       role: 'staff',
       jobTitle: profile.jobTitle,
       department: profile.department,
+      sessionVersion: 0,
+      isActive: true,
       registered: true,
     };
   }
@@ -92,6 +96,8 @@ async function resolveUser(
       role: (record.role as Role) ?? 'staff',
       jobTitle: record.jobTitle || profile.jobTitle,
       department: record.department || profile.department,
+      sessionVersion: record.sessionVersion ?? 0,
+      isActive: record.isActive !== false,
       registered: true,
     };
   }
@@ -110,12 +116,16 @@ async function resolveUser(
         role: 'staff',
         msId: profile.msId,
         hasSignature: false,
+        isActive: true,
+        sessionVersion: 0,
       })
       .returning({
         id: users.id,
         role: users.role,
         jobTitle: users.jobTitle,
         department: users.department,
+        sessionVersion: users.sessionVersion,
+        isActive: users.isActive,
       });
 
     const newUser = inserted[0];
@@ -124,6 +134,8 @@ async function resolveUser(
       role: (newUser.role as Role) ?? 'staff',
       jobTitle: newUser.jobTitle,
       department: newUser.department,
+      sessionVersion: newUser.sessionVersion ?? 0,
+      isActive: newUser.isActive !== false,
       registered: true,
     };
   } catch (insertErr) {
@@ -140,6 +152,8 @@ async function resolveUser(
         role: (fallback[0].role as Role) ?? 'staff',
         jobTitle: fallback[0].jobTitle || profile.jobTitle,
         department: fallback[0].department || profile.department,
+        sessionVersion: fallback[0].sessionVersion ?? 0,
+        isActive: fallback[0].isActive !== false,
         registered: true,
       };
     }
@@ -150,6 +164,8 @@ async function resolveUser(
       role: 'staff',
       jobTitle: profile.jobTitle,
       department: profile.department,
+      sessionVersion: 0,
+      isActive: false,
       registered: false,
     };
   }
@@ -260,9 +276,22 @@ export const GET: APIRoute = async ({ request, redirect, cookies, locals }) => {
       return redirect('/?auth_error=server_error', 302);
     }
 
-    // 5. Only accounts present in our directory may proceed (L-03).
+    // 5. Only active accounts present in our directory may proceed (L-03).
     if (!resolved.registered) {
       return redirect('/?auth_error=user_not_registered', 302);
+    }
+    if (!resolved.isActive) {
+      return redirect('/?auth_error=account_disabled', 302);
+    }
+
+    // Update lastLoginAt in database
+    if (db && resolved.id) {
+      try {
+        const nowStamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        await db.update(users).set({ lastLoginAt: nowStamp }).where(eq(users.id, resolved.id));
+      } catch {
+        // Non-fatal if timestamp update fails
+      }
     }
 
     // 6. Issue a signed, HttpOnly session cookie.
@@ -274,12 +303,18 @@ export const GET: APIRoute = async ({ request, redirect, cookies, locals }) => {
       jobTitle: resolved.jobTitle,
       department: resolved.department,
       role: resolved.role,
+      sessionVersion: resolved.sessionVersion,
     };
 
     const token = await sealSession(sessionUser, env);
     cookies.set(SESSION_COOKIE, token, sessionCookieOptions(request.url));
 
-    return redirect('/?login_success=1', 302);
+    const returnTo = cookies.get('iso_oauth_return_to')?.value;
+    cookies.delete('iso_oauth_return_to', { path: '/' });
+
+    const target = returnTo && returnTo.startsWith('/') ? returnTo : '/';
+    const separator = target.includes('?') ? '&' : '?';
+    return redirect(`${target}${separator}login_success=1`, 302);
   } catch (err) {
     // Generic message outward; details stay server-side.
     console.error('Error during Microsoft callback exchange.');

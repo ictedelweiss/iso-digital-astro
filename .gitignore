@@ -36,3 +36,6 @@ Thumbs.db
 test_*.mjs
 scratch_*.mjs
 
+# AI & local files
+.workbuddy-ai/
+*.xlsx

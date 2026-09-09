@@ -36,10 +36,13 @@ function signatureImg(value: unknown, className?: string): string {
   return `<img src="${escapeHtml(value)}"${classAttr} alt="TTD">`;
 }
 
+import { isDraftPrNumber } from './prNumber';
+
 export function generatePrPdfHtml(pr: PurchaseRequisition, logoBase64: string = '/logo.png'): string {
   const budgetStatus = (pr.budget_status || '').toLowerCase();
   const isDianggarkan = budgetStatus.includes('dianggarkan') && !budgetStatus.includes('belum');
   const isBelumDianggarkan = budgetStatus.includes('belum');
+  const displayPrNum = isDraftPrNumber(pr.pr_number) ? '(Menunggu Penerbitan No. PR - Accounting)' : (pr.pr_number || '-');
 
   // Format Items rows
   let itemRowsHtml = '';
@@ -87,7 +90,7 @@ export function generatePrPdfHtml(pr: PurchaseRequisition, logoBase64: string = 
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Purchase Requisition - ${pr.pr_number}</title>
+    <title>Purchase Requisition - ${displayPrNum}</title>
     <style>
         @page {
             size: A4;
@@ -262,7 +265,7 @@ export function generatePrPdfHtml(pr: PurchaseRequisition, logoBase64: string = 
             <td class="label">Departemen</td>
             <td class="value">: ${pr.department}</td>
             <td class="right-label">Nomor</td>
-            <td class="right-value">: ${pr.pr_number}</td>
+            <td class="right-value">: ${displayPrNum}</td>
         </tr>
     </table>
 
@@ -290,6 +293,7 @@ export function generatePrPdfHtml(pr: PurchaseRequisition, logoBase64: string = 
     <table class="note-table">
         <tr>
             <td><strong>Catatan:</strong> ${pr.notes || '-'}</td>
+            ${pr.attachment_name ? `<td style="text-align: right; width: 45%; font-size: 11px;"><strong>Lampiran:</strong> 📎 ${pr.attachment_name}</td>` : ''}
         </tr>
     </table>
 

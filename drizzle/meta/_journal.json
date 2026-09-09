@@ -29,6 +29,13 @@
       "when": 1788158468671,
       "tag": "0003_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788227930844,
+      "tag": "0004_fast_vertigo",
+      "breakpoints": true
     }
   ]
 }

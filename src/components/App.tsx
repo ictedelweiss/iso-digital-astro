@@ -25,10 +25,12 @@ import LeaveRequestView from './LeaveRequestView';
 import HandoverFormView from './HandoverFormView';
 import MeetingAttendanceView from './MeetingAttendanceView';
 import AssetManagementView from './AssetManagementView';
+import AdminAccessView from './AdminAccessView';
 import PdfPreviewModal from './PdfPreviewModal';
 import SignaturePadModal from './SignaturePadModal';
 import LoginModal from './LoginModal';
 import FirstTimeSignatureModal from './FirstTimeSignatureModal';
+import type { PermissionMap } from '../lib/types';
 
 export default function App() {
   // Navigation & Viewport State
@@ -39,6 +41,7 @@ export default function App() {
 
   // Authentication & User State
   const [currentUser, setCurrentUser] = createSignal<UserProfile | null>(null);
+  const [permissions, setPermissions] = createSignal<PermissionMap | null>(null);
   const [loginModalOpen, setLoginModalOpen] = createSignal(true); // Open by default if no user
   const [signatureOnboardingOpen, setSignatureOnboardingOpen] = createSignal(false);
   const [toastMessage, setToastMessage] = createSignal<string | null>(null);
@@ -66,15 +69,18 @@ export default function App() {
 
   // Check login state and first-time signature onboarding
   onMount(async () => {
-    // Check URL parameters for MS auth feedback
+    // Check URL parameters for direct tab navigation & MS auth feedback
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab') as NavTab | null;
+      if (tabParam && ['dashboard', 'purchase-requisition', 'leave-request', 'handover-form', 'meeting-attendance', 'asset-management', 'admin-access'].includes(tabParam)) {
+        setCurrentTab(tabParam);
+      }
+
       if (urlParams.get('login_success') === '1') {
         showToast('✓ Berhasil login dengan Microsoft 365!');
-        window.history.replaceState({}, document.title, window.location.pathname);
       } else if (urlParams.get('auth_error')) {
         showToast(`❌ Gagal login: ${urlParams.get('auth_error')}`);
-        window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
 
@@ -113,6 +119,8 @@ export default function App() {
           });
           setLoginModalOpen(false); // Close login modal on success
           
+          await loadUserPermissions();
+
           if (!hasSig) {
             setTimeout(() => {
               setSignatureOnboardingOpen(true);
@@ -125,12 +133,29 @@ export default function App() {
     }
   });
 
+  const loadUserPermissions = async () => {
+    try {
+      const res = await fetch('/api/me/permissions');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.modules) {
+          setPermissions(data.modules);
+          const cur = currentTab();
+          if (cur !== 'dashboard' && cur !== 'pdf-preview' && data.modules[cur]?.view === false) {
+            setCurrentTab('dashboard');
+          }
+        }
+      }
+    } catch {}
+  };
+
   // Handle Logout
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch(e) {}
     setCurrentUser(null);
+    setPermissions(null);
     setLoginModalOpen(true);
     showToast('Sesi ditutup.');
   };
@@ -245,6 +270,7 @@ export default function App() {
               isOpenMobile={isMobileMenuOpen()}
               onCloseMobile={() => setIsMobileMenuOpen(false)}
               badgeCounts={badgeCounts()}
+              permissions={permissions()}
             />
           </Show>
 
@@ -252,6 +278,14 @@ export default function App() {
           <DevicePreviewFrame
             deviceView={deviceView()}
             onSelectDevice={(view) => setDeviceView(view)}
+            bottomNav={
+              <MobileNav
+                activeTab={currentTab()}
+                onSelectTab={(tab) => setCurrentTab(tab)}
+                permissions={permissions()}
+                isSimulated={true}
+              />
+            }
           >
             <main class="flex-1 w-full max-w-7xl mx-auto pb-16 lg:pb-8">
             <Show when={currentTab() === 'dashboard'}>
@@ -306,17 +340,31 @@ export default function App() {
             </Show>
 
             <Show when={currentTab() === 'asset-management'}>
-              <AssetManagementView />
+              <AssetManagementView
+                currentUser={currentUser()}
+                showToast={showToast}
+              />
+            </Show>
+
+            <Show when={currentTab() === 'admin-access'}>
+              <AdminAccessView
+                currentUser={currentUser()}
+                showToast={showToast}
+                onPermissionUpdated={loadUserPermissions}
+              />
             </Show>
           </main>
         </DevicePreviewFrame>
       </div>
 
-      {/* Mobile Bottom Bar */}
-      <MobileNav
-        activeTab={currentTab()}
-        onSelectTab={(tab) => setCurrentTab(tab)}
-      />
+      {/* Mobile Bottom Bar (Fixed on real mobile devices) */}
+      <Show when={deviceView() === 'responsive'}>
+        <MobileNav
+          activeTab={currentTab()}
+          onSelectTab={(tab) => setCurrentTab(tab)}
+          permissions={permissions()}
+        />
+      </Show>
 
       {/* Live ISO PDF Preview Modal */}
       <PdfPreviewModal

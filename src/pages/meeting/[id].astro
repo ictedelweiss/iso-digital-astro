@@ -83,7 +83,10 @@ if (!meetingData) {
         ) : (
           <div class="space-y-6">
             <div class="text-center">
-              <a href="/api/auth/ms-login" class="inline-block w-full py-3 bg-[#1877f2] hover:bg-blue-600 text-white font-bold rounded-xl shadow transition text-sm">
+              <a
+                href={`/api/auth/ms-login?return_to=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`}
+                class="inline-block w-full py-3 bg-[#1877f2] hover:bg-blue-600 text-white font-bold rounded-xl shadow transition text-sm"
+              >
                 Log In dengan Microsoft 365 (Internal)
               </a>
               <p class="text-xs text-slate-400 mt-2">Untuk Guru & Karyawan Sinar Putih Edelweiss</p>

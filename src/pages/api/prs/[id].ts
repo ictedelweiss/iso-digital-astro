@@ -6,10 +6,14 @@ import { parseBody, prUpdateSchema } from '../../../lib/schemas';
 import { json, errorResponse } from '../../../lib/validation';
 import { recordAudit } from '../../../lib/audit';
 import { hasRole } from '../../../lib/session';
+import { requirePermission } from '../../../lib/permissions';
 
 const EDITABLE_STATUSES = new Set(['Pending', 'Draft']);
 
 export const PUT: APIRoute = async ({ request, params, locals }) => {
+  const denied = await requirePermission(locals, 'purchase-requisition', 'edit');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -37,20 +41,35 @@ export const PUT: APIRoute = async ({ request, params, locals }) => {
     if (!EDITABLE_STATUSES.has(pr.status)) {
       return errorResponse(409, 'This document is locked because it has been finalised.');
     }
-    if (pr.requesterId !== user.id && !hasRole(user, 'admin')) {
+
+    const isOwner = pr.requesterId === user.id;
+    const isAccounting = user.department === 'Finance & Accounting' || user.department === 'Accounting' || user.role === 'approver';
+    const isAdmin = hasRole(user, 'admin');
+
+    if (!isOwner && !isAccounting && !isAdmin) {
       return errorResponse(403, 'You can only edit your own purchase requisitions.');
     }
 
-    await db
-      .update(purchaseRequisitions)
-      .set({
-        title: body.title,
-        department: body.department,
-        neededDate: body.needed_date,
-        budgetStatus: body.budget_status,
-        notes: body.notes ?? null,
-      })
-      .where(eq(purchaseRequisitions.id, prId));
+    const updateData: Record<string, any> = {};
+    if (body.title !== undefined) updateData.title = body.title;
+    if (body.department !== undefined) updateData.department = body.department;
+    if (body.needed_date !== undefined) updateData.neededDate = body.needed_date;
+    // Rule 1: Only accounting or admin can update budget status
+    if (body.budget_status !== undefined) {
+      if (isAccounting || isAdmin) {
+        updateData.budgetStatus = body.budget_status;
+      }
+    }
+    if (body.notes !== undefined) updateData.notes = body.notes ?? null;
+    if (body.attachment_name !== undefined) updateData.attachmentName = body.attachment_name ?? null;
+    if (body.attachment_data !== undefined) updateData.attachmentData = body.attachment_data ?? null;
+
+    if (Object.keys(updateData).length > 0) {
+      await db
+        .update(purchaseRequisitions)
+        .set(updateData)
+        .where(eq(purchaseRequisitions.id, prId));
+    }
 
     // Line items are not part of the approval record, so replacing them is
     // acceptable — the change itself is still written to the audit trail.
@@ -84,6 +103,9 @@ export const PUT: APIRoute = async ({ request, params, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, locals }) => {
+  const denied = await requirePermission(locals, 'purchase-requisition', 'delete');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 

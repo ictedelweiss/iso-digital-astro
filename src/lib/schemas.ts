@@ -58,7 +58,7 @@ const optionalEmail = z
 const prItemSchema = z.object({
   item_name: text(200),
   qty: positiveNumber(1_000_000),
-  unit: text(50),
+  unit: z.string().max(50).default('Unit').transform((v) => v.trim() || 'Unit'),
   price: positiveNumber(1_000_000_000_000),
 });
 
@@ -69,19 +69,23 @@ export const prCreateSchema = z.object({
   title: text(200),
   department: text(100),
   needed_date: dateString,
-  budget_status: z.enum(['Dianggarkan', 'Belum dianggarkan']),
+  budget_status: z.enum(['Dianggarkan', 'Belum dianggarkan', 'Tidak Memilih']).default('Tidak Memilih'),
   notes: optionalText(2000),
+  attachment_name: optionalText(255),
+  attachment_data: z.string().max(10_000_000).optional().nullable(),
   requester_signature: signature.optional().nullable(),
   items: z.array(prItemSchema).max(100).default([]),
 });
 
 /** `status`, `current_approval_step` and `approvals` are intentionally absent. */
 export const prUpdateSchema = z.object({
-  title: text(200),
-  department: text(100),
-  needed_date: dateString,
-  budget_status: z.enum(['Dianggarkan', 'Belum dianggarkan']),
+  title: text(200).optional(),
+  department: text(100).optional(),
+  needed_date: dateString.optional(),
+  budget_status: z.enum(['Dianggarkan', 'Belum dianggarkan', 'Tidak Memilih']).optional(),
   notes: optionalText(2000),
+  attachment_name: optionalText(255),
+  attachment_data: z.string().max(10_000_000).optional().nullable(),
   items: z.array(prItemSchema).max(100).optional(),
 });
 
@@ -116,6 +120,26 @@ export const leaveUpdateSchema = z.object({
   work_days: leaveNumbers.work_days,
   request_days: leaveNumbers.request_days,
   sisa_after: leaveNumbers.sisa_after,
+});
+
+export const leaveAllocationSchema = z.object({
+  user_id: z.coerce.number().int().positive(),
+  year: z.coerce.number().int().min(2020).max(2100),
+  hak_prev: z.coerce.number().int().min(0).max(100).default(0),
+  hak_curr: z.coerce.number().int().min(0).max(100).default(12),
+  notes: optionalText(500),
+});
+
+export const leaveAllocationBatchSchema = z.object({
+  year: z.coerce.number().int().min(2020).max(2100),
+  allocations: z.array(
+    z.object({
+      user_id: z.coerce.number().int().positive(),
+      hak_prev: z.coerce.number().int().min(0).max(100).default(0),
+      hak_curr: z.coerce.number().int().min(0).max(100).default(12),
+      notes: optionalText(500),
+    })
+  ),
 });
 
 /* ------------------------------------------------------------------ *
@@ -200,6 +224,138 @@ export const saveSignatureSchema = z.object({ signatureData: signature });
 export const approvalDecisionSchema = z.object({
   decision: z.enum(['approved', 'rejected']),
   notes: optionalText(1000),
+  pr_number: optionalText(100),
+  budget_status: z.enum(['Dianggarkan', 'Belum dianggarkan', 'Tidak Memilih']).optional(),
+});
+
+/* ------------------------------------------------------------------ *
+ * Admin & Hak Akses
+ * ------------------------------------------------------------------ */
+
+export const roleEnum = z.enum(['admin', 'coordinator', 'approver', 'staff']);
+
+export const adminUserCreateSchema = z.object({
+  display_name: text(100),
+  email: z
+    .string()
+    .max(254)
+    .refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Invalid email address.')
+    .transform((v) => v.toLowerCase().trim()),
+  username: z
+    .string()
+    .min(3)
+    .max(50)
+    .regex(/^[a-zA-Z0-9._-]+$/, 'Username can only contain alphanumeric characters, dots, underscores, and hyphens.')
+    .transform((v) => v.toLowerCase().trim()),
+  department: text(100),
+  job_title: text(100),
+  role: roleEnum,
+  is_active: z.boolean().default(true),
+});
+
+export const adminUserUpdateSchema = z.object({
+  display_name: text(100).optional(),
+  email: z
+    .string()
+    .max(254)
+    .refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Invalid email address.')
+    .transform((v) => v.toLowerCase().trim())
+    .optional(),
+  username: z
+    .string()
+    .min(3)
+    .max(50)
+    .regex(/^[a-zA-Z0-9._-]+$/, 'Username can only contain alphanumeric characters, dots, underscores, and hyphens.')
+    .transform((v) => v.toLowerCase().trim())
+    .optional(),
+  department: text(100).optional(),
+  job_title: text(100).optional(),
+  role: roleEnum.optional(),
+  is_active: z.boolean().optional(),
+});
+
+export const userPermissionItemSchema = z
+  .object({
+    module_key: text(50),
+    effect: z.enum(['allow', 'deny', 'inherit']),
+    can_view: z.boolean().default(false),
+    can_create: z.boolean().default(false),
+    can_edit: z.boolean().default(false),
+    can_delete: z.boolean().default(false),
+    can_approve: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    if (data.effect === 'allow') {
+      if (data.can_delete && !data.can_view) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'can_delete requires can_view to be true.',
+          path: ['can_delete'],
+        });
+      }
+      if (data.can_approve && !data.can_view) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'can_approve requires can_view to be true.',
+          path: ['can_approve'],
+        });
+      }
+    }
+  });
+
+export const userPermissionsUpdateSchema = z.object({
+  permissions: z.array(userPermissionItemSchema),
+});
+
+export const rolePermissionItemSchema = z
+  .object({
+    module_key: text(50),
+    can_view: z.boolean().default(false),
+    can_create: z.boolean().default(false),
+    can_edit: z.boolean().default(false),
+    can_delete: z.boolean().default(false),
+    can_approve: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    if (data.can_delete && !data.can_view) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'can_delete requires can_view to be true.',
+        path: ['can_delete'],
+      });
+    }
+    if (data.can_approve && !data.can_view) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'can_approve requires can_view to be true.',
+        path: ['can_approve'],
+      });
+    }
+  });
+
+export const rolePermissionsUpdateSchema = z.object({
+  permissions: z.array(rolePermissionItemSchema),
+});
+
+export const moduleCreateSchema = z.object({
+  key: z
+    .string()
+    .min(2)
+    .max(50)
+    .regex(/^[a-z0-9-]+$/, 'Module key must be lowercase kebab-case.'),
+  label: text(100),
+  description: optionalText(500),
+  icon: optionalText(20),
+  sort_order: z.coerce.number().int().default(0),
+  is_active: z.boolean().default(true),
+});
+
+export const moduleUpdateSchema = z.object({
+  label: text(100).optional(),
+  description: optionalText(500),
+  icon: optionalText(20),
+  sort_order: z.coerce.number().int().optional(),
+  is_active: z.boolean().optional(),
 });
 
 /**

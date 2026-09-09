@@ -5,8 +5,12 @@ import { eq, desc } from 'drizzle-orm';
 import { parseBody, meetingCreateSchema } from '../../../lib/schemas';
 import { json, errorResponse } from '../../../lib/validation';
 import { recordAudit } from '../../../lib/audit';
+import { requirePermission } from '../../../lib/permissions';
 
 export const GET: APIRoute = async ({ locals }) => {
+  const denied = await requirePermission(locals, 'meeting-attendance', 'view');
+  if (denied) return denied;
+
   const env = locals.runtime?.env;
   if (!env?.DB) return errorResponse(500, 'Database is not available.');
 
@@ -74,6 +78,9 @@ async function uniqueMeetingId(db: any): Promise<string> {
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  const denied = await requirePermission(locals, 'meeting-attendance', 'create');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 

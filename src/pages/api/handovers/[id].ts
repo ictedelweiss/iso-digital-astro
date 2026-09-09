@@ -6,6 +6,7 @@ import { parseBody, handoverUpdateSchema } from '../../../lib/schemas';
 import { json, errorResponse } from '../../../lib/validation';
 import { recordAudit } from '../../../lib/audit';
 import { hasRole } from '../../../lib/session';
+import { requirePermission } from '../../../lib/permissions';
 
 const EDITABLE_STATUSES = new Set(['Pending', 'Draft']);
 
@@ -17,6 +18,9 @@ const EDITABLE_STATUSES = new Set(['Pending', 'Draft']);
  * `POST /api/handovers/[id]/approve`.
  */
 export const PUT: APIRoute = async ({ request, params, locals }) => {
+  const denied = await requirePermission(locals, 'handover-form', 'edit');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -81,6 +85,9 @@ export const PUT: APIRoute = async ({ request, params, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, locals }) => {
+  const denied = await requirePermission(locals, 'handover-form', 'delete');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 

@@ -1,11 +1,12 @@
 import { For, Show } from 'solid-js';
-import type { NavTab } from '../lib/types';
+import type { NavTab, PermissionMap } from '../lib/types';
 
 interface Props {
   activeTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
+  permissions?: PermissionMap | null;
   badgeCounts: {
     pr: number;
     leave: number;
@@ -16,14 +17,26 @@ interface Props {
 }
 
 export default function Sidebar(props: Props) {
-  const menuItems = () => [
+  const allItems = () => [
     { id: 'dashboard', label: 'Dashboard / My Access', icon: '🏠' },
     { id: 'purchase-requisition', label: 'Purchase Requisition', icon: '📝', badge: props.badgeCounts.pr },
     { id: 'leave-request', label: 'Permohonan Cuti', icon: '🏖️', badge: props.badgeCounts.leave },
     { id: 'handover-form', label: 'Serah Terima ICT', icon: '📦', badge: props.badgeCounts.handover },
     { id: 'meeting-attendance', label: 'Absensi Rapat', icon: '👥', badge: props.badgeCounts.meetings },
     { id: 'asset-management', label: 'Manajemen Aset', icon: '🏷️', badge: props.badgeCounts.assets },
+    { id: 'admin-access', label: 'Admin & Hak Akses', icon: '⚙️' },
   ] as Array<{ id: NavTab; label: string; icon: string; badge?: number }>;
+
+  const menuItems = () => {
+    const list = allItems();
+    if (!props.permissions) return list;
+    const filtered = list.filter((item) => {
+      if (item.id === 'dashboard') return true;
+      return props.permissions?.[item.id]?.view === true;
+    });
+    // Safety: if filter results in only dashboard or empty due to DB unmigrated, show standard items
+    return filtered.length > 1 ? filtered : list.filter(item => item.id !== 'admin-access');
+  };
 
   const handleSelect = (tab: NavTab) => {
     props.onSelectTab(tab);

@@ -13,8 +13,9 @@ export default function LoginModal(props: Props) {
 
   const handleMs365Login = () => {
     setIsRedirecting(true);
-    // Redirect to Microsoft OAuth route
-    window.location.href = '/api/auth/ms-login';
+    // Redirect to Microsoft OAuth route, preserving current query params for deep links
+    const returnTo = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/';
+    window.location.href = `/api/auth/ms-login?return_to=${encodeURIComponent(returnTo)}`;
   };
 
   const filteredUsers = () => {

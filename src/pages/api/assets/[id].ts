@@ -6,8 +6,12 @@ import { parseBody, assetUpdateSchema } from '../../../lib/schemas';
 import { json, errorResponse } from '../../../lib/validation';
 import { recordAudit } from '../../../lib/audit';
 import { hasRole } from '../../../lib/session';
+import { requirePermission } from '../../../lib/permissions';
 
 export const PUT: APIRoute = async ({ request, params, locals }) => {
+  const denied = await requirePermission(locals, 'asset-management', 'edit');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -16,10 +20,6 @@ export const PUT: APIRoute = async ({ request, params, locals }) => {
 
   const assetId = Number(params.id);
   if (!Number.isInteger(assetId) || assetId <= 0) return errorResponse(400, 'Invalid asset ID.');
-
-  if (!hasRole(user, 'coordinator')) {
-    return errorResponse(403, 'Only coordinators and above can update assets.');
-  }
 
   const parsed = await parseBody(request, assetUpdateSchema);
   if (!parsed.ok) return parsed.response;
@@ -41,10 +41,10 @@ export const PUT: APIRoute = async ({ request, params, locals }) => {
         location: body.location ?? asset.location,
         condition: body.condition ?? asset.condition,
         status: body.status ?? asset.status,
-        serialNumber: body.serial_number ?? asset.serialNumber,
-        purchaseDate: body.purchase_date ?? asset.purchaseDate,
-        value: body.value ?? asset.value,
-        assignedTo: body.assigned_to ?? asset.assignedTo,
+        serialNumber: body.serial_number !== undefined ? body.serial_number : asset.serialNumber,
+        purchaseDate: body.purchase_date !== undefined ? body.purchase_date : asset.purchaseDate,
+        value: body.value !== undefined ? body.value : asset.value,
+        assignedTo: body.assigned_to !== undefined ? body.assigned_to : asset.assignedTo,
       })
       .where(eq(assets.id, assetId));
 
@@ -63,6 +63,9 @@ export const PUT: APIRoute = async ({ request, params, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, locals }) => {
+  const denied = await requirePermission(locals, 'asset-management', 'delete');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -71,10 +74,6 @@ export const DELETE: APIRoute = async ({ params, locals }) => {
 
   const assetId = Number(params.id);
   if (!Number.isInteger(assetId) || assetId <= 0) return errorResponse(400, 'Invalid asset ID.');
-
-  if (!hasRole(user, 'admin')) {
-    return errorResponse(403, 'Only administrators can delete assets.');
-  }
 
   try {
     const db = drizzle(env.DB);

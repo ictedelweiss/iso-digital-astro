@@ -21,23 +21,87 @@ export type NavTab =
   | 'handover-form'
   | 'meeting-attendance'
   | 'asset-management'
+  | 'admin-access'
   | 'pdf-preview';
+
+export type UserRole = 'admin' | 'approver' | 'coordinator' | 'staff';
 
 export interface UserProfile {
   id: string | number;
   displayName: string;
   email: string;
   username: string;
-  department: Department;
+  department: Department | string;
   jobTitle: string;
-  role: 'admin' | 'approver' | 'user' | 'staff' | 'coordinator';
+  role: UserRole;
   signature_data?: string; // base64 data URL
   signature_path?: string;
   has_signature: boolean;
   ms_id?: string;
   avatar_url?: string;
   created_at?: string;
+  is_active?: boolean;
+  session_version?: number;
+  last_login_at?: string | null;
 }
+
+export const MODULE_KEYS = [
+  'dashboard',
+  'purchase-requisition',
+  'leave-request',
+  'handover-form',
+  'meeting-attendance',
+  'asset-management',
+  'admin-access',
+] as const;
+
+export type ModuleKey = (typeof MODULE_KEYS)[number];
+export type Action = 'view' | 'create' | 'edit' | 'delete' | 'approve';
+export type ModuleAccess = Record<Action, boolean>;
+export type PermissionMap = Record<string, ModuleAccess>;
+
+export interface ModuleRegistryItem {
+  key: string;
+  label: string;
+  description?: string | null;
+  icon?: string | null;
+  sort_order: number;
+  is_active: boolean;
+  is_system: boolean;
+}
+
+export interface AdminUserListItem {
+  id: number;
+  display_name: string;
+  email: string;
+  username: string;
+  department: string;
+  job_title: string;
+  role: UserRole;
+  is_active: boolean;
+  session_version: number;
+  last_login_at: string | null;
+  created_at: string;
+  accessible_modules_count: number;
+}
+
+export interface UserPermissionDetail {
+  module_key: string;
+  module_label: string;
+  module_icon?: string | null;
+  effective: ModuleAccess;
+  role_default: ModuleAccess;
+  is_overridden: boolean;
+  effect: 'allow' | 'deny' | 'inherit';
+}
+
+export interface RolePermissionDetail {
+  module_key: string;
+  module_label: string;
+  module_icon?: string | null;
+  permissions: ModuleAccess;
+}
+
 
 export interface PrItem {
   id: number;
@@ -59,15 +123,21 @@ export interface ApprovalStep {
   notes?: string;
 }
 
+export type BudgetStatus = 'Dianggarkan' | 'Belum dianggarkan' | 'Tidak Memilih';
+
 export interface PurchaseRequisition {
   id: number;
   pr_number: string;
   title: string;
   requester: string;
+  requester_id?: number;
+  requester_email?: string;
   department: Department | string;
   needed_date: string;
-  budget_status: 'Dianggarkan' | 'Belum dianggarkan';
+  budget_status: BudgetStatus;
   notes: string;
+  attachment_name?: string | null;
+  attachment_data?: string | null;
   status: 'Draft' | 'Pending' | 'Approved' | 'Rejected';
   current_approval_step: number;
   requester_signature?: string;
@@ -97,6 +167,25 @@ export interface LeaveRequest {
   signature_pemohon?: string;
   created_at: string;
   approvals: ApprovalStep[];
+}
+
+export interface EmployeeLeaveAllocation {
+  userId: number;
+  displayName: string;
+  username: string;
+  email: string;
+  department: string;
+  jobTitle: string;
+  role: string;
+  year: number;
+  hakPrev: number;
+  hakCurr: number;
+  totalHak: number;
+  takenDays: number;
+  sisa: number;
+  notes?: string;
+  updatedAt?: string | null;
+  isCustomized: boolean;
 }
 
 export interface HandoverForm {

@@ -15,7 +15,7 @@ export default function FirstTimeSignatureModal(props: Props) {
   const [hasDrawn, setHasDrawn] = createSignal(false);
   const [agreed, setAgreed] = createSignal(true);
   const [isSaving, setIsSaving] = createSignal(false);
-  const [strokeColor, setStrokeColor] = createSignal('#1e3a8a'); // Professional deep navy/blue ink
+  const strokeColor = '#0f172a'; // Hitam Resmi
 
   let ctx: CanvasRenderingContext2D | null = null;
   let lastX = 0;
@@ -36,36 +36,14 @@ export default function FirstTimeSignatureModal(props: Props) {
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.lineWidth = 2.5;
-      ctx.strokeStyle = strokeColor();
-      drawGuidelines();
+      ctx.strokeStyle = strokeColor;
     }
-  };
-
-  const drawGuidelines = () => {
-    if (!ctx || !canvasRef) return;
-    const rect = canvasRef.getBoundingClientRect();
-
-    // Baseline guide
-    ctx.save();
-    ctx.beginPath();
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1;
-    ctx.moveTo(30, rect.height - 40);
-    ctx.lineTo(rect.width - 30, rect.height - 40);
-    ctx.stroke();
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '11px Inter, sans-serif';
-    ctx.fillText('Garis Dasar Tanda Tangan (Baseline)', 30, rect.height - 46);
-    ctx.restore();
   };
 
   const clearCanvas = () => {
     if (!ctx || !canvasRef) return;
     const rect = canvasRef.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
-    drawGuidelines();
     setHasDrawn(false);
   };
 
@@ -100,7 +78,7 @@ export default function FirstTimeSignatureModal(props: Props) {
     ctx.beginPath();
     ctx.moveTo(lastX, lastY);
     ctx.lineTo(x, y);
-    ctx.strokeStyle = strokeColor();
+    ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 2.6;
     ctx.stroke();
 
@@ -196,25 +174,14 @@ export default function FirstTimeSignatureModal(props: Props) {
                 <span>🖌️</span> Silakan Tanda Tangan di Kotak Berikut:
               </span>
               
-              {/* Ink Color Selector */}
               <div class="flex items-center gap-2">
-                <span class="text-slate-400 text-[11px]">Warna Tinta:</span>
-                <button
-                  type="button"
-                  onClick={() => { setStrokeColor('#1e3a8a'); if (ctx) ctx.strokeStyle = '#1e3a8a'; }}
-                  class={`w-5 h-5 rounded-full bg-blue-900 border-2 transition ${strokeColor() === '#1e3a8a' ? 'border-amber-400 scale-110 shadow-sm' : 'border-white'}`}
-                  title="Biru Dokumen (Standar)"
-                />
-                <button
-                  type="button"
-                  onClick={() => { setStrokeColor('#0f172a'); if (ctx) ctx.strokeStyle = '#0f172a'; }}
-                  class={`w-5 h-5 rounded-full bg-slate-900 border-2 transition ${strokeColor() === '#0f172a' ? 'border-amber-400 scale-110 shadow-sm' : 'border-white'}`}
-                  title="Hitam Resmi"
-                />
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-700 rounded-md border border-slate-200">
+                  <span class="w-2 h-2 rounded-full bg-slate-900 inline-block"></span> Tinta Hitam Resmi
+                </span>
                 <button
                   type="button"
                   onClick={clearCanvas}
-                  class="ml-2 px-2.5 py-1 text-[11px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition"
+                  class="px-2.5 py-1 text-[11px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition"
                 >
                   🗑️ Bersihkan
                 </button>
@@ -222,9 +189,13 @@ export default function FirstTimeSignatureModal(props: Props) {
             </div>
 
             <div class="relative bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl overflow-hidden touch-none hover:border-[#1877f2] transition">
+              {/* Baseline Guide (HTML Overlay - tidak akan ikut terekspor ke gambar PNG) */}
+              <div class="absolute inset-x-8 bottom-10 border-b border-dashed border-slate-300 pointer-events-none flex justify-between items-end pb-1 select-none">
+                <span class="text-[10px] text-slate-400 font-sans tracking-wide">Garis Dasar Tanda Tangan (Baseline)</span>
+              </div>
               <canvas
                 ref={canvasRef}
-                class="w-full h-44 cursor-crosshair block"
+                class="w-full h-44 cursor-crosshair block relative z-10 bg-transparent"
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
@@ -234,7 +205,7 @@ export default function FirstTimeSignatureModal(props: Props) {
                 onTouchEnd={stopDrawing}
               />
               <Show when={!hasDrawn()}>
-                <div class="absolute inset-0 flex items-center justify-center pointer-events-none text-xs text-slate-400 font-medium">
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none text-xs text-slate-400 font-medium z-10">
                   ✍️ Gunakan sentuhan jari, stylus, atau kursor mouse untuk menandatangani
                 </div>
               </Show>

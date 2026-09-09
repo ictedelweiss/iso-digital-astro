@@ -9,6 +9,9 @@
  *   5. Attach security headers, including a nonce-based CSP (M-03).
  */
 import type { MiddlewareHandler } from 'astro';
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import { users } from './db/schema';
 import { SESSION_COOKIE, getRuntimeEnv, openSession, hasRole } from './lib/session';
 import type { SessionUser } from './lib/session';
 import { rateLimit, clientKey, LIMITS } from './lib/rateLimit';
@@ -97,7 +100,37 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     context.locals.user = null;
   }
 
-  const user = context.locals.user;
+  // Verify account validity against DB (isActive and sessionVersion)
+  // Revoked accounts or bumped session versions lose access immediately.
+  let user = context.locals.user;
+  const d1 = (context.locals as { runtime?: { env?: { DB?: any } } }).runtime?.env?.DB || (env as any)?.DB;
+  if (user && user.id !== null && d1) {
+    try {
+      const db = drizzle(d1);
+      const rows = await db
+        .select({
+          isActive: users.isActive,
+          sessionVersion: users.sessionVersion,
+        })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+
+      const dbUser = rows[0];
+      const tokenVersion = user.sessionVersion ?? 0;
+      const currentVersion = dbUser?.sessionVersion ?? 0;
+
+      if (!dbUser || dbUser.isActive === false || currentVersion !== tokenVersion) {
+        // Account disabled or session revoked
+        context.locals.user = null;
+        user = null;
+        context.cookies.delete(SESSION_COOKIE, { path: '/' });
+      }
+    } catch {
+      // Non-fatal if DB is temporarily unreachable
+    }
+  }
+
   const key = clientKey(request, user?.id ?? null);
 
   // 2. Rate limiting (M-06).

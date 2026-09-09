@@ -23,6 +23,18 @@ export const GET: APIRoute = async ({ request, redirect, cookies }) => {
     maxAge: 60 * 10, // 10 minutes
   });
 
+  // Preserve return_to URL (e.g. deep link to PR approval)
+  const returnTo = url.searchParams.get('return_to');
+  if (returnTo && returnTo.startsWith('/')) {
+    cookies.set('iso_oauth_return_to', returnTo, {
+      path: '/',
+      httpOnly: true,
+      secure: url.protocol === 'https:',
+      sameSite: 'lax',
+      maxAge: 60 * 10, // 10 minutes
+    });
+  }
+
   const params = new URLSearchParams({
     client_id: MS_CLIENT_ID,
     response_type: 'code',

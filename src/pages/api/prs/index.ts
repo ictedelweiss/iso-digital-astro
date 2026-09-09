@@ -7,8 +7,12 @@ import { json, errorResponse } from '../../../lib/validation';
 import { buildApprovalChain, approverNameMap } from '../../../lib/approvals';
 import { recordAudit } from '../../../lib/audit';
 import { notifyNewDocument } from '../../../lib/notifications';
+import { requirePermission } from '../../../lib/permissions';
 
 export const GET: APIRoute = async ({ locals }) => {
+  const denied = await requirePermission(locals, 'purchase-requisition', 'view');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -27,11 +31,14 @@ export const GET: APIRoute = async ({ locals }) => {
         needed_date: purchaseRequisitions.neededDate,
         budget_status: purchaseRequisitions.budgetStatus,
         notes: purchaseRequisitions.notes,
+        attachment_name: purchaseRequisitions.attachmentName,
+        attachment_data: purchaseRequisitions.attachmentData,
         status: purchaseRequisitions.status,
         current_approval_step: purchaseRequisitions.currentApprovalStep,
         requester_signature: purchaseRequisitions.requesterSignature,
         created_at: purchaseRequisitions.createdAt,
         requesterName: users.displayName,
+        requesterEmail: users.email,
       })
       .from(purchaseRequisitions)
       .innerJoin(users, eq(purchaseRequisitions.requesterId, users.id));
@@ -60,10 +67,14 @@ export const GET: APIRoute = async ({ locals }) => {
       pr_number: pr.pr_number,
       title: pr.title,
       requester: pr.requesterName,
+      requester_id: pr.requester_id,
+      requester_email: pr.requesterEmail,
       department: pr.department,
       needed_date: pr.needed_date,
       budget_status: pr.budget_status,
       notes: pr.notes,
+      attachment_name: pr.attachment_name,
+      attachment_data: pr.attachment_data,
       status: pr.status,
       current_approval_step: pr.current_approval_step,
       requester_signature: pr.requester_signature,
@@ -125,7 +136,12 @@ async function generatePrNumber(db: any, department: string): Promise<string> {
   return `${prefix}${String(highest + 1).padStart(3, '0')}`;
 }
 
+import { isDraftPrNumber } from '../../../lib/prNumber';
+
 export const POST: APIRoute = async ({ request, locals }) => {
+  const denied = await requirePermission(locals, 'purchase-requisition', 'create');
+  if (denied) return denied;
+
   const user = locals.user;
   if (!user) return errorResponse(401, 'Unauthorized.');
   // The requester is the authenticated account — never a client-supplied id.
@@ -140,7 +156,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const db = drizzle(env.DB);
     const body = parsed.data;
-    const prNumber = await generatePrNumber(db, body.department);
+    // Provisional draft number until Accounting assigns the official PR number at Step 2
+    const prNumber = `DRAFT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const newPr = await db
       .insert(purchaseRequisitions)
@@ -150,8 +167,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
         requesterId: user.id,
         department: body.department,
         neededDate: body.needed_date,
-        budgetStatus: body.budget_status,
+        // Rule 1: Form creator does not set budget status; Accounting fills it
+        budgetStatus: 'Tidak Memilih',
         notes: body.notes ?? null,
+        attachmentName: body.attachment_name ?? null,
+        attachmentData: body.attachment_data ?? null,
         requesterSignature: body.requester_signature ?? null,
         status: 'Pending',
         currentApprovalStep: 1,
@@ -186,15 +206,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
       actor: user,
     });
 
-    // Step 1: Send notification email to coordinator
-    notifyNewDocument(env, db, {
-      type: 'Purchase Requisition',
-      docNumber: prNumber,
-      title: body.title,
-      requesterName: user.displayName,
-      requesterEmail: user.email,
-      department: body.department,
-    }).catch((err) => console.error('Error sending PR creation notification:', err));
+    // Step 1: Send notification email to coordinator (must await in Cloudflare Pages)
+    try {
+      await notifyNewDocument(env, db, {
+        type: 'Purchase Requisition',
+        docNumber: prNumber,
+        title: body.title,
+        requesterName: user.displayName,
+        requesterEmail: user.email,
+        department: body.department,
+      });
+    } catch (err) {
+      console.error('Error sending PR creation notification:', err);
+    }
 
     return json({ success: true, prId, pr_number: prNumber }, 201);
   } catch {

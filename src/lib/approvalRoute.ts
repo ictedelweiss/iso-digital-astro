@@ -11,6 +11,13 @@ import { parseBody, approvalDecisionSchema } from './schemas';
 import { decideApproval } from './approvals';
 import { json, errorResponse } from './validation';
 import type { AuditEntity } from './audit';
+import { requirePermission, type ModuleKey } from './permissions';
+
+const ENTITY_TO_MODULE: Record<string, ModuleKey> = {
+  pr: 'purchase-requisition',
+  leave: 'leave-request',
+  handover: 'handover-form',
+};
 
 export interface ApprovalRouteConfig {
   entityType: AuditEntity;
@@ -24,6 +31,12 @@ export interface ApprovalRouteConfig {
 
 export function createApprovalRoute(config: ApprovalRouteConfig): APIRoute {
   return async ({ request, params, locals }) => {
+    const moduleKey = ENTITY_TO_MODULE[config.entityType];
+    if (moduleKey) {
+      const denied = await requirePermission(locals, moduleKey, 'approve');
+      if (denied) return denied;
+    }
+
     const user = locals.user;
     if (!user) return errorResponse(401, 'Unauthorized.');
 
@@ -62,7 +75,11 @@ export function createApprovalRoute(config: ApprovalRouteConfig): APIRoute {
         id,
         parsed.data.decision,
         parsed.data.notes ?? undefined,
-        env
+        env,
+        {
+          prNumber: parsed.data.pr_number ?? undefined,
+          budgetStatus: parsed.data.budget_status ?? undefined,
+        }
       );
 
       if (!result.ok) return errorResponse(result.statusCode, result.error);
@@ -71,6 +88,8 @@ export function createApprovalRoute(config: ApprovalRouteConfig): APIRoute {
         success: true,
         status: result.status,
         current_approval_step: result.currentStep,
+        pr_number: result.prNumber,
+        budget_status: result.budgetStatus,
       });
     } catch {
       return errorResponse(500, 'Failed to record the approval decision.');
