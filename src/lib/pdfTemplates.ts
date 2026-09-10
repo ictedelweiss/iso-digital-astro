@@ -1,4 +1,5 @@
 import type { PurchaseRequisition, LeaveRequest, HandoverForm, Meeting } from './types';
+import { DEFAULT_OFFICIALS, getDepartmentCoordinator } from './dummyData';
 
 // ---------------------------------------------------------------------------
 // Security helpers
@@ -76,15 +77,15 @@ export function generatePrPdfHtml(pr: PurchaseRequisition, logoBase64: string = 
   
   const koordApp = pr.approvals?.find(a => a.role === 'koordinator');
   const koordSig = (koordApp?.status === 'approved' && koordApp.signature) ? signatureImg(koordApp.signature) : '';
-  const koordName = koordApp?.approverName || '—';
+  const koordName = koordApp?.approverName || getDepartmentCoordinator(pr.department);
 
   const accApp = pr.approvals?.find(a => a.role === 'accounting');
   const accSig = (accApp?.status === 'approved' && accApp.signature) ? signatureImg(accApp.signature) : '';
-  const accName = accApp?.approverName || '—';
+  const accName = accApp?.approverName || DEFAULT_OFFICIALS.accounting;
 
   const ketuaApp = pr.approvals?.find(a => a.role === 'ketua_yayasan');
   const ketuaSig = (ketuaApp?.status === 'approved' && ketuaApp.signature) ? signatureImg(ketuaApp.signature) : '';
-  const ketuaName = ketuaApp?.approverName || '—';
+  const ketuaName = ketuaApp?.approverName || DEFAULT_OFFICIALS.ketuaYayasan;
 
   return `<!doctype html>
 <html>
@@ -335,11 +336,11 @@ export function generateLeavePdfHtml(leave: LeaveRequest, logoBase64: string = '
   
   const koordApp = leave.approvals?.find(a => a.role === 'koordinator');
   const koordSig = (koordApp?.status === 'approved' && koordApp.signature) ? signatureImg(koordApp.signature, 'sig-img') : '';
-  const koordName = koordApp?.approverName || '—';
+  const koordName = koordApp?.approverName || getDepartmentCoordinator(leave.department);
 
   const hrdApp = leave.approvals?.find(a => a.role === 'hrd' || a.role === 'ketua_yayasan');
   const hrdSig = (hrdApp?.status === 'approved' && hrdApp.signature) ? signatureImg(hrdApp.signature, 'sig-img') : '';
-  const hrdName = hrdApp?.approverName || '—';
+  const hrdName = hrdApp?.approverName || DEFAULT_OFFICIALS.hrd;
 
   const currentYear = new Date().getFullYear();
   const prevYear = currentYear - 1;
@@ -656,11 +657,14 @@ export function generateHandoverPdfHtml(handover: HandoverForm, logoBase64: stri
 
   const koordApp = handover.approvals?.find(a => a.role === 'koordinator');
   const koordSig = (koordApp?.status === 'approved' && koordApp.signature) ? signatureImg(koordApp.signature, 'sig-img') : '';
-  const koordName = koordApp?.approverName || '—';
+  const koordName = koordApp?.approverName || getDepartmentCoordinator(handover.recipient_department);
 
-  const hrdApp = handover.approvals?.find(a => a.role === 'hrd');
+  const hrdApp = handover.approvals?.find(a => a.role === 'hrd' || a.role === 'ketua_yayasan');
   const hrdSig = (hrdApp?.status === 'approved' && hrdApp.signature) ? signatureImg(hrdApp.signature, 'sig-img') : '';
-  const hrdName = hrdApp?.approverName || '—';
+  const hrdName = hrdApp?.approverName || DEFAULT_OFFICIALS.hrd;
+
+  const ictApp = handover.approvals?.find(a => a.role === 'ict');
+  const ictName = ictApp?.approverName || DEFAULT_OFFICIALS.ict;
 
   return `<!DOCTYPE html>
 <html>
@@ -847,7 +851,7 @@ export function generateHandoverPdfHtml(handover: HandoverForm, logoBase64: stri
             <td>
                 <div class="sig-role">Diserahkan Oleh,</div>
                 <div class="sig-img-container">${ictSig}</div>
-                <div class="sig-name">(Petugas ICT)</div>
+                <div class="sig-name">(${ictName})</div>
                 <div class="sig-title">ICT</div>
             </td>
             <td>

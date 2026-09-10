@@ -8,28 +8,52 @@ export const SAMPLE_SIGNATURE_1 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgA
 export const SAMPLE_SIGNATURE_2 = SAMPLE_SIGNATURE_1;
 export const SAMPLE_SIGNATURE_3 = SAMPLE_SIGNATURE_1;
 
-/**
- * Coordinator labels used only for display fallbacks in the create form.
- *
- * These are generic placeholders — no real staff names or email addresses.
- * The authoritative approval chain is built server-side (see lib/approvals.ts),
- * so this map never influences who can approve a document.
- */
-export const COORDINATORS_MAP: Record<Department, { name: string, email: string }> = {
-  'ICT': { name: 'Koordinator ICT', email: 'koordinator.ict@sekolah-contoh.sch.id' },
-  'SD': { name: 'Koordinator SD', email: 'koordinator.sd@sekolah-contoh.sch.id' },
-  'Management': { name: 'Koordinator Yayasan', email: 'koordinator.yayasan@sekolah-contoh.sch.id' },
-  // fallback for others
-  'SMP': { name: 'Koordinator SMP', email: 'koordinator.smp@sekolah-contoh.sch.id' },
-  'SMA': { name: 'Koordinator SMA', email: 'koordinator.sma@sekolah-contoh.sch.id' },
-  'SMK': { name: 'Koordinator SMK', email: 'koordinator.smk@sekolah-contoh.sch.id' },
-  'HRD': { name: 'Koordinator HRD', email: 'koordinator.hrd@sekolah-contoh.sch.id' },
-  'GA': { name: 'Koordinator GA', email: 'koordinator.ga@sekolah-contoh.sch.id' },
-  'Kurikulum': { name: 'Koordinator Kurikulum', email: 'koordinator.kurikulum@sekolah-contoh.sch.id' },
-  'Kesiswaan': { name: 'Koordinator Kesiswaan', email: 'koordinator.kesiswaan@sekolah-contoh.sch.id' },
-  'Finance & Accounting': { name: 'Koordinator Keuangan', email: 'koordinator.keuangan@sekolah-contoh.sch.id' },
-  'Sarpras': { name: 'Koordinator Sarpras', email: 'koordinator.sarpras@sekolah-contoh.sch.id' },
+export const DEFAULT_OFFICIALS = {
+  ketuaYayasan: 'Juarsa Oemardikarta',
+  hrd: 'Auria Stadita Insani',
+  ict: 'Aris Setyawan',
+  accounting: 'Titis Rahmawati Wijiastuti',
+  finance: 'Ni Ketut Swastitri',
 };
+
+export const COORDINATORS_MAP: Record<string, { name: string; email: string }> = {
+  'KB/TK': { name: 'Armitridesi Shinta Marito', email: 'armitridesi.marito@edelweiss.sch.id' },
+  'SD': { name: 'Miske Ferlani Lumintaintang, S.Pd', email: 'miske.ferlani@edelweiss.sch.id' },
+  'SMP': { name: 'Yudha Hadi Purnama, S.T., M.Pd', email: 'yudha.punama@edelweiss.sch.id' },
+  'PKBM': { name: 'Nadya Khusnul Khotimah', email: 'nadya.khotimah@edelweiss.sch.id' },
+  'GA': { name: 'Anggraeni Novianti', email: 'anggraeni.novianti@edelweiss.sch.id' },
+  'Customer Service Officer': { name: 'Permata Chitra Haelda Manik, S.Pd., M.Pd', email: 'permata.manik@edelweiss.sch.id' },
+  'Finance & Accounting': { name: 'Ni Ketut Swastitri', email: 'ketut.swastitri@edelweiss.sch.id' },
+  'HRD': { name: 'Auria Stadita Insani', email: 'auria.insani@edelweiss.sch.id' },
+  'ICT': { name: 'Aris Setyawan', email: 'aris.setyawan@edelweiss.sch.id' },
+  'Management': { name: 'Medina Marpaung', email: 'medina.marpaung@edelweiss.sch.id' },
+  'Marketing': { name: 'Permata Chitra Haelda Manik, S.Pd., M.Pd', email: 'permata.manik@edelweiss.sch.id' },
+  'Operator': { name: 'Anggraeni Novianti', email: 'anggraeni.novianti@edelweiss.sch.id' },
+  'Kurikulum': { name: 'Febriana', email: 'febriana@edelweiss.sch.id' },
+  'Kesiswaan': { name: 'Ade Ayu Puspitawati, S.Pd', email: 'ayu.puspitawati@edelweiss.sch.id' },
+  'Sarpras': { name: 'Anggraeni Novianti', email: 'anggraeni.novianti@edelweiss.sch.id' },
+};
+
+export function getDepartmentCoordinator(dept?: string): string {
+  if (!dept) return 'Auria Stadita Insani';
+  const clean = dept.trim();
+  if (COORDINATORS_MAP[clean]) {
+    return COORDINATORS_MAP[clean].name;
+  }
+  const d = clean.toLowerCase();
+  if (d.includes('sd')) return 'Miske Ferlani Lumintaintang, S.Pd';
+  if (d.includes('smp')) return 'Yudha Hadi Purnama, S.T., M.Pd';
+  if (d.includes('tk') || d.includes('kb')) return 'Armitridesi Shinta Marito';
+  if (d.includes('hrd') || d.includes('sdm')) return 'Auria Stadita Insani';
+  if (d.includes('ga') || d.includes('general')) return 'Anggraeni Novianti';
+  if (d.includes('ict') || d.includes('it')) return 'Aris Setyawan';
+  if (d.includes('marketing') || d.includes('customer') || d.includes('cso')) return 'Permata Chitra Haelda Manik, S.Pd., M.Pd';
+  if (d.includes('accounting')) return 'Titis Rahmawati Wijiastuti';
+  if (d.includes('finance')) return 'Ni Ketut Swastitri';
+  if (d.includes('management') || d.includes('yayasan')) return 'Medina Marpaung';
+  if (d.includes('operator')) return 'Anggraeni Novianti';
+  return 'Miske Ferlani Lumintaintang, S.Pd';
+}
 
 // We return empty arrays for initial mocked data since they are now fetched via API
 export const INITIAL_PURCHASE_REQUISITIONS: any[] = [];
