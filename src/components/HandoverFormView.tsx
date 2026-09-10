@@ -88,14 +88,14 @@ export default function HandoverFormView(props: Props) {
   const [filterStatus, setFilterStatus] = createSignal<'all' | 'Pending' | 'Approved'>('all');
 
   // Form State
-  const [formItemName, setFormItemName] = createSignal('Laptop Lenovo ThinkPad L14 Gen 4');
+  const [formItemName, setFormItemName] = createSignal('');
   const [formRecipientName, setFormRecipientName] = createSignal('');
   const [formRecipientEmail, setFormRecipientEmail] = createSignal('');
   const [formRecipientDept, setFormRecipientDept] = createSignal<Department>('SD');
-  const [formSerialNum, setFormSerialNum] = createSignal('PF-9X28172');
-  const [formSpec, setFormSpec] = createSignal('Core i5-1335U, RAM 16GB, SSD 512GB, Charger Original');
-  const [formLoanPeriod, setFormLoanPeriod] = createSignal('Selama Menjabat Koordinator SD');
-  const [formNotes, setFormNotes] = createSignal('Perangkat operasional kerja unit SD.');
+  const [formSerialNum, setFormSerialNum] = createSignal('');
+  const [formSpec, setFormSpec] = createSignal('');
+  const [formLoanPeriod, setFormLoanPeriod] = createSignal('');
+  const [formNotes, setFormNotes] = createSignal('');
 
   // Employee Autocomplete State
   const [showEmployeeDropdown, setShowEmployeeDropdown] = createSignal(false);
@@ -125,14 +125,14 @@ export default function HandoverFormView(props: Props) {
   };
 
   const resetForm = () => {
-    setFormItemName('Laptop Lenovo ThinkPad L14 Gen 4');
+    setFormItemName('');
     setFormRecipientName('');
     setFormRecipientEmail('');
     setFormRecipientDept('SD');
-    setFormSerialNum('PF-9X28172');
-    setFormSpec('Core i5-1335U, RAM 16GB, SSD 512GB, Charger Original');
-    setFormLoanPeriod('Selama Menjabat Koordinator SD');
-    setFormNotes('Perangkat operasional kerja unit SD.');
+    setFormSerialNum('');
+    setFormSpec('');
+    setFormLoanPeriod('');
+    setFormNotes('');
     setSelectedEmployee(null);
     setIsEditMode(false);
     setEditHandoverId(null);
@@ -519,9 +519,18 @@ export default function HandoverFormView(props: Props) {
                   <div>
                     <div class="text-xs font-bold text-slate-700 mb-1">Spesifikasi & Kondisi</div>
                     <div class="p-3 bg-slate-50 rounded-xl text-xs text-slate-700 border border-slate-200">
-                      {h.specification}
+                      {h.specification || '-'}
                     </div>
                   </div>
+
+                  <Show when={h.notes}>
+                    <div>
+                      <div class="text-xs font-bold text-slate-700 mb-1">Keterangan / Catatan</div>
+                      <div class="p-3 bg-slate-50 rounded-xl text-xs text-slate-700 border border-slate-200">
+                        {h.notes}
+                      </div>
+                    </div>
+                  </Show>
 
                   {/* Actions */}
                   {h.status === 'Pending' && (
@@ -557,10 +566,11 @@ export default function HandoverFormView(props: Props) {
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Perangkat</label>
                 <input
                   type="text"
+                  placeholder="Contoh: Laptop ThinkPad / ID Card RFID / Monitor..."
                   value={formItemName()}
                   onInput={(e) => setFormItemName(e.currentTarget.value)}
                   required
-                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#1877f2] transition"
                 />
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -663,19 +673,43 @@ export default function HandoverFormView(props: Props) {
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Serial Number (SN)</label>
                 <input
                   type="text"
+                  placeholder="Nomor seri atau kode aset (opsional)..."
                   value={formSerialNum()}
                   onInput={(e) => setFormSerialNum(e.currentTarget.value)}
-                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 font-mono"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 font-mono placeholder-slate-400 focus:bg-white focus:border-[#1877f2] transition"
                 />
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Spesifikasi & Kelengkapan</label>
                 <textarea
                   rows="2"
+                  placeholder="Contoh: Core i5, RAM 16GB, Charger Original / ID Card RFID Kartu Akses..."
                   value={formSpec()}
                   onInput={(e) => setFormSpec(e.currentTarget.value)}
-                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#1877f2] transition"
                 ></textarea>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Masa Peminjaman</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Selama Bertugas / 1 Tahun / Operasional"
+                    value={formLoanPeriod()}
+                    onInput={(e) => setFormLoanPeriod(e.currentTarget.value)}
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#1877f2] transition"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Keterangan / Catatan</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Perangkat operasional unit kerja"
+                    value={formNotes()}
+                    onInput={(e) => setFormNotes(e.currentTarget.value)}
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#1877f2] transition"
+                  />
+                </div>
               </div>
               <div class="flex justify-end gap-3 pt-3 border-t border-slate-200">
                 <button type="button" onClick={() => setShowCreateModal(false)} class="px-4 py-2 text-xs text-slate-500 hover:text-slate-800">Batal</button>
