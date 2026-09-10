@@ -55,6 +55,70 @@ export function getDepartmentCoordinator(dept?: string): string {
   return 'Miske Ferlani Lumintaintang, S.Pd';
 }
 
+/**
+ * Check whether a person (name, email, department, or explicit role) is a Coordinator.
+ */
+export function isUserCoordinator(
+  name?: string,
+  email?: string,
+  dept?: string,
+  role?: string
+): boolean {
+  if (role === 'coordinator') return true;
+  if (!name && !email) return false;
+
+  const n = (name || '').toLowerCase().trim();
+  const e = (email || '').toLowerCase().trim();
+
+  // 1. Check against COORDINATORS_MAP
+  for (const info of Object.values(COORDINATORS_MAP)) {
+    const coordName = info.name.toLowerCase().trim();
+    const coordEmail = info.email.toLowerCase().trim();
+
+    if (n && (coordName === n || coordName.includes(n) || n.includes(coordName))) return true;
+    if (e && (coordEmail === e || coordEmail.includes(e))) return true;
+
+    // Check base name without degrees (e.g. "Miske Ferlani" vs "Miske Ferlani Lumintaintang, S.Pd")
+    const baseCoord = coordName.split(',')[0].trim();
+    const baseUser = n.split(',')[0].trim();
+    if (baseCoord && baseUser && (baseCoord === baseUser || baseCoord.includes(baseUser) || baseUser.includes(baseCoord))) {
+      return true;
+    }
+  }
+
+  // 2. If department is provided, check if user matches department coordinator
+  if (dept && n) {
+    const deptCoord = getDepartmentCoordinator(dept).toLowerCase().trim();
+    const baseDeptCoord = deptCoord.split(',')[0].trim();
+    const baseUser = n.split(',')[0].trim();
+    if (baseDeptCoord && baseUser && (baseDeptCoord === baseUser || baseDeptCoord.includes(baseUser) || baseUser.includes(baseDeptCoord))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Resolves the designated coordinator name for a document signature block.
+ * 
+ * SPECIAL RULE:
+ * Untuk semua form, jika yang request atau penerimanya adalah koordinator,
+ * yang bertandatangan di tempat koordinator adalah Ketua Yayasan (Juarsa Oemardikarta),
+ * namun keterangannya/jabatannya tetap "Koordinator".
+ */
+export function getSignerCoordinatorName(
+  dept?: string,
+  requesterOrRecipientName?: string,
+  requesterOrRecipientEmail?: string,
+  role?: string
+): string {
+  if (isUserCoordinator(requesterOrRecipientName, requesterOrRecipientEmail, dept, role)) {
+    return DEFAULT_OFFICIALS.ketuaYayasan;
+  }
+  return getDepartmentCoordinator(dept);
+}
+
 // We return empty arrays for initial mocked data since they are now fetched via API
 export const INITIAL_PURCHASE_REQUISITIONS: any[] = [];
 export const INITIAL_LEAVE_REQUESTS: any[] = [];

@@ -256,6 +256,8 @@ function getDocDeepLink(docType: string, docId?: number, docNumber?: string): st
   return `${APP_URL}/?${params.toString()}`;
 }
 
+import { isUserCoordinator } from './dummyData';
+
 /**
  * Send notification when a new document is submitted (Step 1 - Koordinator).
  */
@@ -272,16 +274,22 @@ export async function notifyNewDocument(
     department: string;
   }
 ) {
-  // Step 1 is always coordinator
-  const coordinatorEmails = await getApproverEmails(db, 'coordinator', doc.department);
-  if (coordinatorEmails.length === 0) return;
+  // Step 1: If requester is a coordinator, Ketua Yayasan is the approver
+  const isReqCoord = isUserCoordinator(doc.requesterName, doc.requesterEmail, doc.department);
+  const targetRole = isReqCoord ? 'admin' : 'coordinator';
+  const approverEmails = await getApproverEmails(db, targetRole, doc.department);
+  if (approverEmails.length === 0) return;
+
+  const greeting = isReqCoord
+    ? 'Yth. Ketua Yayasan'
+    : `Yth. Koordinator Unit ${doc.department || ''}`.trim();
 
   const html = buildEmailTemplate({
     title: `Pengajuan ${doc.type} Baru`,
     badgeText: 'Menunggu Persetujuan Tahap 1',
     badgeBg: '#fef3c7',
     badgeColor: '#b45309',
-    messageIntro: `Yth. Koordinator Unit ${doc.department}, terdapat pengajuan dokumen baru yang memerlukan persetujuan dan verifikasi Anda:`,
+    messageIntro: `${greeting}, terdapat pengajuan dokumen baru yang memerlukan persetujuan dan verifikasi Anda:`,
     details: [
       { label: 'Jenis Dokumen', value: doc.type },
       { label: 'No. Dokumen', value: doc.docNumber },
@@ -293,7 +301,7 @@ export async function notifyNewDocument(
   });
 
   await sendGraphEmail(env, {
-    to: coordinatorEmails,
+    to: approverEmails,
     subject: `[ISO Edelweiss] Permohonan Persetujuan: ${doc.docNumber} (${doc.requesterName})`,
     htmlBody: html,
   });

@@ -16,9 +16,10 @@ import { users } from '../db/schema';
 import type { Role, SessionUser } from './session';
 import { recordAudit, nowStamp, type AuditEntity } from './audit';
 import { notifyApprovalStepUpdate } from './notifications';
+import { DEFAULT_OFFICIALS, isUserCoordinator } from './dummyData';
 
 export const APPROVAL_STEPS = [
-  { step: 1, role: 'koordinator', roleTitle: 'Koordinator Unit' },
+  { step: 1, role: 'koordinator', roleTitle: 'Koordinator' },
   { step: 2, role: 'accounting', roleTitle: 'Accounting' },
   { step: 3, role: 'ketua_yayasan', roleTitle: 'Ketua Yayasan' },
 ] as const;
@@ -117,13 +118,41 @@ export async function decideApproval(
     return { ok: false, statusCode: 409, error: 'Current approval step could not be resolved.' };
   }
 
-  // 1. Role check — the step defines the required authority, or admin with superuser override.
+  // 1. Check if the requester or recipient is a coordinator
+  let isRequesterCoordinator = false;
+  const ownerId = config.requesterId ?? parent.requesterId ?? parent.recipientId;
+  if (ownerId) {
+    const ownerRows = await db
+      .select({ displayName: users.displayName, email: users.email, department: users.department, role: users.role })
+      .from(users)
+      .where(eq(users.id, ownerId))
+      .limit(1);
+    if (ownerRows[0]) {
+      const o = ownerRows[0];
+      isRequesterCoordinator = o.role === 'coordinator' || isUserCoordinator(o.displayName, o.email, o.department);
+    }
+  }
+
+  // 1b. Role check — the step defines the required authority, or admin with superuser override.
   const required = requiredRoleFor(target.role);
-  if (user.role !== required && user.role !== 'admin') {
+  const isKetuaYayasan =
+    user.displayName?.toLowerCase().trim() === DEFAULT_OFFICIALS.ketuaYayasan.toLowerCase().trim() ||
+    (user as any).jobTitle?.toLowerCase().includes('ketua yayasan');
+
+  // SPECIAL RULE: Jika yang request/penerima adalah koordinator, yang bertandatangan di tempat koordinator adalah Ketua Yayasan
+  if (target.role === 'koordinator' && isRequesterCoordinator) {
+    if (!isKetuaYayasan && user.role !== 'admin') {
+      return {
+        ok: false,
+        statusCode: 403,
+        error: 'Pemohon/Penerima dokumen adalah Koordinator. Persetujuan tahap Koordinator harus dilakukan oleh Ketua Yayasan.',
+      };
+    }
+  } else if (user.role !== required && user.role !== 'admin' && !isKetuaYayasan) {
     return {
       ok: false,
       statusCode: 403,
-      error: `Your role (${user.role}) is not authorised for step ${target.step} (${target.roleTitle}). Only a '${required}' or 'admin' may approve this step.`,
+      error: `Your role (${user.role}) is not authorised for step ${target.step} (${target.roleTitle}). Only a '${required}', 'admin', or Ketua Yayasan may approve this step.`,
     };
   }
 
@@ -297,12 +326,11 @@ export async function decideApproval(
  * Client-supplied approval arrays are ignored entirely: the workflow is defined
  * here so it cannot be shortened or skipped from the browser.
  */
-export function buildApprovalChain(department?: string) {
+export function buildApprovalChain(department?: string, isRequesterCoordinator: boolean = false) {
   return APPROVAL_STEPS.map((entry) => ({
     step: entry.step,
     role: entry.role,
-    roleTitle:
-      entry.step === 1 && department ? `Koordinator ${department}` : entry.roleTitle,
+    roleTitle: entry.step === 1 ? 'Koordinator' : entry.roleTitle,
     status: entry.step === 1 ? 'current' : 'pending',
   }));
 }

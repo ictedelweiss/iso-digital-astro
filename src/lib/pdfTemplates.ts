@@ -1,5 +1,5 @@
 import type { PurchaseRequisition, LeaveRequest, HandoverForm, Meeting } from './types';
-import { DEFAULT_OFFICIALS, getDepartmentCoordinator } from './dummyData';
+import { DEFAULT_OFFICIALS, getDepartmentCoordinator, getSignerCoordinatorName } from './dummyData';
 
 // ---------------------------------------------------------------------------
 // Security helpers
@@ -77,7 +77,7 @@ export function generatePrPdfHtml(pr: PurchaseRequisition, logoBase64: string = 
   
   const koordApp = pr.approvals?.find(a => a.role === 'koordinator');
   const koordSig = (koordApp?.status === 'approved' && koordApp.signature) ? signatureImg(koordApp.signature) : '';
-  const koordName = koordApp?.approverName || getDepartmentCoordinator(pr.department);
+  const koordName = koordApp?.approverName || getSignerCoordinatorName(pr.department, pr.requester, pr.requester_email);
 
   const accApp = pr.approvals?.find(a => a.role === 'accounting');
   const accSig = (accApp?.status === 'approved' && accApp.signature) ? signatureImg(accApp.signature) : '';
@@ -336,7 +336,7 @@ export function generateLeavePdfHtml(leave: LeaveRequest, logoBase64: string = '
   
   const koordApp = leave.approvals?.find(a => a.role === 'koordinator');
   const koordSig = (koordApp?.status === 'approved' && koordApp.signature) ? signatureImg(koordApp.signature, 'sig-img') : '';
-  const koordName = koordApp?.approverName || getDepartmentCoordinator(leave.department);
+  const koordName = koordApp?.approverName || getSignerCoordinatorName(leave.department, leave.name);
 
   const hrdApp = leave.approvals?.find(a => a.role === 'hrd' || a.role === 'ketua_yayasan');
   const hrdSig = (hrdApp?.status === 'approved' && hrdApp.signature) ? signatureImg(hrdApp.signature, 'sig-img') : '';
@@ -628,7 +628,7 @@ export function generateLeavePdfHtml(leave: LeaveRequest, logoBase64: string = '
                     <div class="sig-role">Disetujui Oleh,</div>
                     <div class="sig-img-container">${koordSig}</div>
                     <div class="sig-name">${koordName}</div>
-                    <div class="sig-title">Direct Superior</div>
+                    <div class="sig-title">Koordinator</div>
                 </td>
                 <td>
                     <div class="sig-role">Diketahui Oleh,</div>
@@ -657,7 +657,7 @@ export function generateHandoverPdfHtml(handover: HandoverForm, logoBase64: stri
 
   const koordApp = handover.approvals?.find(a => a.role === 'koordinator');
   const koordSig = (koordApp?.status === 'approved' && koordApp.signature) ? signatureImg(koordApp.signature, 'sig-img') : '';
-  const koordName = koordApp?.approverName || getDepartmentCoordinator(handover.recipient_department);
+  const koordName = koordApp?.approverName || getSignerCoordinatorName(handover.recipient_department, handover.recipient_name, handover.recipient_email);
 
   const hrdApp = handover.approvals?.find(a => a.role === 'hrd' || a.role === 'ketua_yayasan');
   const hrdSig = (hrdApp?.status === 'approved' && hrdApp.signature) ? signatureImg(hrdApp.signature, 'sig-img') : '';
