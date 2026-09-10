@@ -1,7 +1,18 @@
-import { createSignal, createEffect, For, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, createResource, createEffect, For, Show, onMount, onCleanup } from 'solid-js';
 import QRCode from 'qrcode';
 import type { Meeting, Attendee, UserProfile, Department } from '../lib/types';
 import { SAMPLE_SIGNATURE_1, SAMPLE_SIGNATURE_2, SAMPLE_SIGNATURE_3, OFFICIAL_DEPARTMENTS } from '../lib/dummyData';
+
+const fetchUsers = async () => {
+  try {
+    const res = await fetch('/api/users');
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.data || []) as any[];
+  } catch {
+    return [];
+  }
+};
 
 interface Props {
   meetings: Meeting[];
@@ -11,6 +22,7 @@ interface Props {
 }
 
 export default function MeetingAttendanceView(props: Props) {
+  const [usersList, { refetch: refetchUsers }] = createResource(fetchUsers, { initialValue: [] });
   const [meetings, setMeetings] = createSignal<Meeting[]>(props.meetings);
   const [activeMeeting, setActiveMeeting] = createSignal<Meeting | null>(props.meetings[0] || null);
   const [qrDataUrl, setQrDataUrl] = createSignal('');
@@ -93,24 +105,41 @@ export default function MeetingAttendanceView(props: Props) {
   const [newTime, setNewTime] = createSignal('');
   const [newLocation, setNewLocation] = createSignal('');
   const [newLeader, setNewLeader] = createSignal('');
+  const [showLeaderDropdown, setShowLeaderDropdown] = createSignal(false);
+
+  const matchedLeaders = () => {
+    const q = newLeader().trim().toLowerCase();
+    const list = usersList() || [];
+    if (!q) return list.slice(0, 6);
+    return list.filter(
+      (emp: any) =>
+        emp.displayName.toLowerCase().includes(q) ||
+        (emp.department && emp.department.toLowerCase().includes(q)) ||
+        (emp.jobTitle && emp.jobTitle.toLowerCase().includes(q))
+    ).slice(0, 8);
+  };
 
   const openCreateModal = () => {
+    refetchUsers();
     setNewTitle('');
     setNewDate('');
     setNewTime('');
     setNewLocation('');
     setNewLeader(props.currentUser?.displayName || 'Admin');
+    setShowLeaderDropdown(false);
     setIsEditMode(false);
     setEditMeetingId(null);
     setShowCreateModal(true);
   };
 
   const populateFormForEdit = (meeting: Meeting) => {
+    refetchUsers();
     setNewTitle(meeting.title);
     setNewDate(meeting.date);
     setNewTime(meeting.time);
     setNewLocation(meeting.location);
     setNewLeader(meeting.leader);
+    setShowLeaderDropdown(false);
     setIsEditMode(true);
     setEditMeetingId(meeting.id);
     setShowCreateModal(true);
@@ -811,6 +840,46 @@ export default function MeetingAttendanceView(props: Props) {
                   required
                   class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-[#1877f2]"
                 />
+              </div>
+
+              <div class="relative">
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-semibold text-slate-700">Pimpinan Rapat</label>
+                  <span class="text-[10px] text-indigo-600 font-medium">💡 Ketik nama untuk cari</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Nama pimpinan rapat..."
+                  value={newLeader()}
+                  onFocus={() => setShowLeaderDropdown(true)}
+                  onInput={(e) => {
+                    setNewLeader(e.currentTarget.value);
+                    setShowLeaderDropdown(true);
+                  }}
+                  required
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-[#1877f2]"
+                />
+                <Show when={showLeaderDropdown() && matchedLeaders().length > 0}>
+                  <div class="absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-44 overflow-y-auto divide-y divide-slate-100">
+                    <For each={matchedLeaders()}>
+                      {(emp) => (
+                        <div
+                          onClick={() => {
+                            setNewLeader(emp.displayName);
+                            setShowLeaderDropdown(false);
+                          }}
+                          class="p-2 hover:bg-indigo-50 cursor-pointer transition flex items-center justify-between text-xs"
+                        >
+                          <div>
+                            <div class="font-bold text-slate-800">{emp.displayName}</div>
+                            <div class="text-[10px] text-slate-500">{emp.jobTitle} • {emp.department}</div>
+                          </div>
+                          <span class="text-[10px] text-indigo-600 font-semibold">Pilih</span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </Show>
               </div>
 
               <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">

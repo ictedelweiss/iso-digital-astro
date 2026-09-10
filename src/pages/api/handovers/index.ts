@@ -91,18 +91,31 @@ export const GET: APIRoute = async ({ locals }) => {
 };
 
 /**
- * Resolve the recipient from the email typed into the form.
+ * Resolve the recipient from the email or name typed into the form.
  *
- * The client used to send no recipient at all, so every form was silently
- * attributed to user 1. When the address matches a known account we link to it;
- * otherwise the submitting user is recorded as the recipient.
+ * When the address matches a known account we link to it; if not found, we also
+ * match by exact or trimmed display name. Otherwise the submitting user is
+ * recorded as the recipient fallback.
  */
-async function resolveRecipient(db: any, email: string | null | undefined, fallbackId: number | null) {
-  if (email) {
+async function resolveRecipient(
+  db: any,
+  email: string | null | undefined,
+  name: string | null | undefined,
+  fallbackId: number | null
+) {
+  if (email && email.trim()) {
     const rows = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, email.toLowerCase()))
+      .where(eq(users.email, email.trim().toLowerCase()))
+      .limit(1);
+    if (rows[0]?.id) return rows[0].id;
+  }
+  if (name && name.trim()) {
+    const rows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.displayName, name.trim()))
       .limit(1);
     if (rows[0]?.id) return rows[0].id;
   }
@@ -126,7 +139,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const db = drizzle(env.DB);
     const body = parsed.data;
-    const recipientId = await resolveRecipient(db, body.recipient_email, user.id);
+    const recipientId = await resolveRecipient(db, body.recipient_email, body.recipient_name, user.id);
     if (recipientId === null) {
       return errorResponse(400, 'Recipient could not be resolved.');
     }

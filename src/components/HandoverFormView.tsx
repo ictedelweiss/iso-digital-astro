@@ -3,11 +3,29 @@ import type { HandoverForm, UserProfile, Department } from '../lib/types';
 import { SAMPLE_SIGNATURE_1, OFFICIAL_DEPARTMENTS, COORDINATORS_MAP } from '../lib/dummyData';
 import { ACTIVE_EMPLOYEES, type EmployeeSeed } from '../lib/employeeData';
 
+export interface EmployeeUser {
+  id?: number;
+  displayName: string;
+  email: string;
+  username: string;
+  department: string;
+  jobTitle: string;
+  role?: string;
+  nik?: string;
+}
+
 const fetchHandovers = async () => {
   const res = await fetch('/api/handovers');
   if (!res.ok) throw new Error('Failed to fetch handovers');
   const json = await res.json();
   return (json.data || []) as HandoverForm[];
+};
+
+const fetchUsers = async () => {
+  const res = await fetch('/api/users');
+  if (!res.ok) return ACTIVE_EMPLOYEES as EmployeeUser[];
+  const json = await res.json();
+  return (json.data && json.data.length > 0 ? json.data : ACTIVE_EMPLOYEES) as EmployeeUser[];
 };
 
 interface Props {
@@ -20,6 +38,9 @@ interface Props {
 export default function HandoverFormView(props: Props) {
   const [handovers, { mutate: setHandovers, refetch: refetchHandovers }] = createResource(fetchHandovers, {
     initialValue: props.handovers || [],
+  });
+  const [usersList, { refetch: refetchUsers }] = createResource(fetchUsers, {
+    initialValue: ACTIVE_EMPLOYEES as EmployeeUser[],
   });
   const [selectedHandover, setSelectedHandover] = createSignal<HandoverForm | null>(null);
   const [showCreateModal, setShowCreateModal] = createSignal(false);
@@ -78,21 +99,24 @@ export default function HandoverFormView(props: Props) {
 
   // Employee Autocomplete State
   const [showEmployeeDropdown, setShowEmployeeDropdown] = createSignal(false);
-  const [selectedEmployee, setSelectedEmployee] = createSignal<EmployeeSeed | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = createSignal<EmployeeUser | null>(null);
 
   const matchedEmployees = () => {
     const q = formRecipientName().trim().toLowerCase();
-    if (!q) return ACTIVE_EMPLOYEES.slice(0, 8);
-    return ACTIVE_EMPLOYEES.filter(
+    const list = usersList() || (ACTIVE_EMPLOYEES as EmployeeUser[]);
+    if (!q) return list.slice(0, 8);
+    return list.filter(
       (emp) =>
         emp.displayName.toLowerCase().includes(q) ||
         emp.department.toLowerCase().includes(q) ||
         emp.jobTitle.toLowerCase().includes(q) ||
-        emp.nik.includes(q)
+        (emp.username && emp.username.toLowerCase().includes(q)) ||
+        (emp.nik && emp.nik.includes(q)) ||
+        (emp.email && emp.email.toLowerCase().includes(q))
     ).slice(0, 10);
   };
 
-  const handleSelectEmployee = (emp: EmployeeSeed) => {
+  const handleSelectEmployee = (emp: EmployeeUser) => {
     setFormRecipientName(emp.displayName);
     setFormRecipientEmail(emp.email);
     setFormRecipientDept((emp.department as Department) || 'SD');
@@ -109,16 +133,19 @@ export default function HandoverFormView(props: Props) {
     setFormSpec('Core i5-1335U, RAM 16GB, SSD 512GB, Charger Original');
     setFormLoanPeriod('Selama Menjabat Koordinator SD');
     setFormNotes('Perangkat operasional kerja unit SD.');
+    setSelectedEmployee(null);
     setIsEditMode(false);
     setEditHandoverId(null);
   };
 
   const openCreateModal = () => {
     resetForm();
+    refetchUsers();
     setShowCreateModal(true);
   };
 
   const populateFormForEdit = (h: HandoverForm) => {
+    refetchUsers();
     setFormItemName(h.item_name);
     setFormRecipientName(h.recipient_name);
     setFormRecipientEmail(h.recipient_email || '');
@@ -134,13 +161,31 @@ export default function HandoverFormView(props: Props) {
 
   const handleCreateSubmit = (e: Event) => {
     e.preventDefault();
+    let recipientEmail = formRecipientEmail();
+    let recipientDept = formRecipientDept();
+
+    // If recipient email is empty, attempt to match from current user list
+    if (!recipientEmail && formRecipientName().trim()) {
+      const match = (usersList() || []).find(
+        (u) => u.displayName.trim().toLowerCase() === formRecipientName().trim().toLowerCase()
+      );
+      if (match) {
+        recipientEmail = match.email;
+        setFormRecipientEmail(match.email);
+        if (match.department) {
+          recipientDept = match.department as Department;
+          setFormRecipientDept(recipientDept);
+        }
+      }
+    }
+
     const newHandover: HandoverForm = {
       id: Date.now(),
       item_name: formItemName(),
       handover_date: new Date().toISOString().split('T')[0],
       recipient_name: formRecipientName(),
-      recipient_email: formRecipientEmail(),
-      recipient_department: formRecipientDept(),
+      recipient_email: recipientEmail,
+      recipient_department: recipientDept,
       quantity: 1,
       serial_number: formSerialNum(),
       specification: formSpec(),
@@ -157,7 +202,7 @@ export default function HandoverFormView(props: Props) {
           role: 'recipient',
           roleTitle: 'Penerima Barang',
           approverName: formRecipientName(),
-          approverEmail: formRecipientEmail(),
+          approverEmail: recipientEmail,
           status: 'current',
         },
         {
@@ -584,7 +629,7 @@ export default function HandoverFormView(props: Props) {
                             <div class="text-[11px] text-slate-500 flex items-center gap-1.5">
                               <span>{emp.jobTitle}</span>
                               <span>•</span>
-                              <span class="font-mono text-[10px] text-slate-400">{emp.nik}</span>
+                              <span class="font-mono text-[10px] text-slate-400">{emp.nik || emp.username}</span>
                             </div>
                           </div>
                         )}

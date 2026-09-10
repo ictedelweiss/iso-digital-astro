@@ -11,6 +11,13 @@ const fetchAssets = async () => {
   return (json.data || []) as Asset[];
 };
 
+const fetchUsers = async () => {
+  const res = await fetch('/api/users');
+  if (!res.ok) return ACTIVE_EMPLOYEES;
+  const json = await res.json();
+  return (json.data && json.data.length > 0 ? json.data : ACTIVE_EMPLOYEES);
+};
+
 interface Props {
   currentUser?: UserProfile;
   showToast?: (msg: string) => void;
@@ -44,6 +51,9 @@ const CONDITION_OPTIONS = ['Baik', 'Rusak Ringan', 'Rusak Berat'] as const;
 
 export default function AssetManagementView(props: Props) {
   const [assets, { refetch: refetchAssets, mutate: setAssets }] = createResource(fetchAssets, { initialValue: [] });
+  const [usersList, { refetch: refetchUsers }] = createResource(fetchUsers, {
+    initialValue: ACTIVE_EMPLOYEES,
+  });
   const [selectedAssetForLabel, setSelectedAssetForLabel] = createSignal<Asset | null>(null);
   const [showLabelModal, setShowLabelModal] = createSignal(false);
   const [qrCodeUrl, setQrCodeUrl] = createSignal('');
@@ -117,6 +127,7 @@ export default function AssetManagementView(props: Props) {
 
   // Open Create Form
   const openCreateModal = () => {
+    refetchUsers();
     setIsEditMode(false);
     setEditAssetId(null);
 
@@ -142,6 +153,7 @@ export default function AssetManagementView(props: Props) {
 
   // Open Edit Form
   const openEditModal = (asset: Asset) => {
+    refetchUsers();
     setIsEditMode(true);
     setEditAssetId(asset.id);
     setFormAssetCode(asset.asset_code);
@@ -167,17 +179,19 @@ export default function AssetManagementView(props: Props) {
   // Autocomplete matched employees
   const matchedEmployees = () => {
     const q = formAssignedTo().trim().toLowerCase();
-    if (!q) return ACTIVE_EMPLOYEES.slice(0, 6);
-    return ACTIVE_EMPLOYEES.filter(
-      (emp) =>
+    const list = usersList() || ACTIVE_EMPLOYEES;
+    if (!q) return list.slice(0, 6);
+    return list.filter(
+      (emp: any) =>
         emp.displayName.toLowerCase().includes(q) ||
-        emp.department.toLowerCase().includes(q) ||
-        emp.jobTitle.toLowerCase().includes(q)
+        (emp.department && emp.department.toLowerCase().includes(q)) ||
+        (emp.jobTitle && emp.jobTitle.toLowerCase().includes(q)) ||
+        (emp.username && emp.username.toLowerCase().includes(q))
     ).slice(0, 8);
   };
 
-  const handleSelectEmployee = (emp: EmployeeSeed) => {
-    setFormAssignedTo(`${emp.displayName} (${emp.department})`);
+  const handleSelectEmployee = (emp: any) => {
+    setFormAssignedTo(emp.department ? `${emp.displayName} (${emp.department})` : emp.displayName);
     if (formStatus() === 'Tersedia') {
       setFormStatus('Digunakan');
     }
